@@ -1,0 +1,107 @@
+name: Batteries
+
+options:
+  bundleIdPrefix: com.xelaods
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_LANGUAGE: ja
+    DEVELOPMENT_TEAM: ""
+
+targets:
+  Batteries:
+    type: application
+    platform: iOS
+    sources:
+      - path: Batteries
+        excludes:
+          - "**/*.entitlements"
+      - path: Shared
+    dependencies:
+      - target: BatteriesWidget
+    configFiles:
+      Debug: Config/App.xcconfig
+      Release: Config/App.xcconfig
+    settings:
+      base:
+        CODE_SIGN_ENTITLEMENTS: Batteries/Batteries.entitlements
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    info:
+      path: Batteries/Info.plist
+      properties:
+        CFBundleDisplayName: バッテリー
+        CFBundleDevelopmentRegion: ja
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        AppGroupID: $(APP_GROUP_ID)
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        ITSAppUsesNonExemptEncryption: false
+        NSBluetoothAlwaysUsageDescription: AirPods などの近くの機器が発信している電池残量を読み取るために Bluetooth を使います。
+        NSCalendarsFullAccessUsageDescription: ウィジェットに電池残量を渡すため、カレンダーの2001年1月3日にメモを1件だけ保存します。ほかの予定を読んだり書き換えたりはしません。
+        NSCalendarsUsageDescription: ウィジェットに電池残量を渡すため、カレンダーにメモを1件だけ保存します。
+        CFBundleURLTypes:
+          - CFBundleURLName: com.xelaods.batteries.open
+            CFBundleURLSchemes:
+              - batteries
+
+  BatteriesWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: BatteriesWidget
+        excludes:
+          - "**/*.entitlements"
+      - path: Shared
+    configFiles:
+      Debug: Config/Widget.xcconfig
+      Release: Config/Widget.xcconfig
+    settings:
+      base:
+        CODE_SIGN_ENTITLEMENTS: BatteriesWidget/BatteriesWidget.entitlements
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME: WidgetBackground
+        SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
+    info:
+      path: BatteriesWidget/Info.plist
+      properties:
+        CFBundleDisplayName: バッテリー
+        CFBundleDevelopmentRegion: ja
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        AppGroupID: $(APP_GROUP_ID)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        NSCalendarsFullAccessUsageDescription: アプリが保存した電池残量のメモを読み込んで表示します。
+
+  BatteriesTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: BatteriesTests
+    dependencies:
+      - target: Batteries
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  Batteries:
+    build:
+      targets:
+        Batteries: all
+        BatteriesWidget: all
+    test:
+      targets:
+        - BatteriesTests

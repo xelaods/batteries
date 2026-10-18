@@ -1,0 +1,3 @@
+// アプリ本体の設定。
+PRODUCT_BUNDLE_IDENTIFIER = com.xelaods.batteries
+APP_GROUP_ID = group.com.xelaods.batteries

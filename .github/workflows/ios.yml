@@ -1,0 +1,114 @@
+name: iOS Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 60
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Install XcodeGen and xcbeautify
+        run: brew install xcodegen xcbeautify
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Run unit tests
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(x["udid"] for k,v in sorted(d.items(), reverse=True) if "iOS" in k for x in v if x["name"].startswith("iPhone")))')
+          echo "Simulator: $UDID"
+          set -o pipefail
+          xcodebuild test \
+            -project Batteries.xcodeproj \
+            -scheme Batteries \
+            -destination "id=$UDID" \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/test.log" | xcbeautify --renderer github-actions || {
+            grep -E "error:|Test Case .* failed|XCTAssert" "$RUNNER_TEMP/test.log" | head -40 | while IFS= read -r line; do echo "::error::$line"; done
+            exit 1
+          }
+
+      # 見本のデータで各画面を撮影し、ci-screenshots ブランチに置く（見た目の確認用）
+      - name: Screenshots
+        if: github.event_name != 'pull_request'
+        continue-on-error: true
+        run: |
+          set -x
+          UDID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(x["udid"] for k,v in sorted(d.items(), reverse=True) if "iOS" in k for x in v if x["name"].startswith("iPhone") and "Pro" in x["name"] and "Max" not in x["name"]))')
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcodebuild build -project Batteries.xcodeproj -scheme Batteries -destination "id=$UDID" \
+            -derivedDataPath "$RUNNER_TEMP/sim" CODE_SIGNING_ALLOWED=NO -quiet
+          xcrun simctl install "$UDID" "$RUNNER_TEMP/sim/Build/Products/Debug-iphonesimulator/Batteries.app"
+          xcrun simctl privacy "$UDID" grant bluetooth com.xelaods.batteries || true
+          xcrun simctl status_bar "$UDID" override --time 9:41 --batteryLevel 100 --cellularBars 4 || true
+          mkdir -p "$RUNNER_TEMP/shots"
+          for mode in light dark; do
+            xcrun simctl ui "$UDID" appearance $mode
+            for spec in "1-home|home" "2-detail|detail" "3-diagnostics|diag" "4-settings|settings" "5-widgets|gallery"; do
+              name=${spec%%|*}; screen=${spec#*|}
+              xcrun simctl terminate "$UDID" com.xelaods.batteries || true
+              xcrun simctl launch "$UDID" com.xelaods.batteries -demo -screen $screen
+              sleep 5
+              xcrun simctl io "$UDID" screenshot "$RUNNER_TEMP/shots/$name-$mode.png"
+            done
+          done
+          cd "$RUNNER_TEMP/shots"
+          git init -q && git checkout -q -b ci-screenshots
+          git -c user.name="github-actions" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" add .
+          git -c user.name="github-actions" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -qm "Screenshots for ${{ github.sha }}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci-screenshots
+
+      # 署名なしの .ipa（普段の署名ツールで署名してインストールする）
+      - name: Build unsigned IPA
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Batteries.xcodeproj \
+            -scheme Batteries \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} 2>&1 | tee "$RUNNER_TEMP/unsigned.log" | xcbeautify --renderer github-actions || {
+            grep -E "error:" "$RUNNER_TEMP/unsigned.log" | head -40 | while IFS= read -r line; do echo "::error::$line"; done
+            exit 1
+          }
+          mkdir -p "$RUNNER_TEMP/unsigned/Payload" "$RUNNER_TEMP/ipa-unsigned"
+          cp -R "$RUNNER_TEMP/dd/Build/Products/Release-iphoneos/Batteries.app" "$RUNNER_TEMP/unsigned/Payload/"
+          ls "$RUNNER_TEMP/unsigned/Payload/Batteries.app/PlugIns"
+          (cd "$RUNNER_TEMP/unsigned" && zip -qry "$RUNNER_TEMP/ipa-unsigned/Batteries-unsigned-${{ github.run_number }}.ipa" Payload)
+
+      - uses: actions/upload-artifact@v7
+        with:
+          path: ${{ runner.temp }}/ipa-unsigned/Batteries-unsigned-${{ github.run_number }}.ipa
+          archive: false
+          retention-days: 14
+
+      # iPhone から直接ダウンロードしやすいよう、リリースにも添付する
+      - name: Attach to release
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: バッテリー build ${{ github.run_number }}
+          body: "未署名の ipa です。普段の署名ツールで署名してインストールしてください。"
+          files: ${{ runner.temp }}/ipa-unsigned/Batteries-unsigned-${{ github.run_number }}.ipa
+          make_latest: true
