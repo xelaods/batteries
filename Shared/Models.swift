@@ -50,38 +50,48 @@ struct DeviceRecord: Codable, Hashable, Identifiable {
 struct Snapshot: Codable, Equatable {
     var devices: [DeviceRecord] = []
     var savedAt: Date = .distantPast
+    /// PC から値を受け取る中継の合言葉（ウィジェットにも渡すためここに持つ）
+    var relayTopic: String?
+    /// PC ごとの最後に受け取った時刻（PC の名前 → 時刻）
+    var computers: [String: Date]?
 
     /// 新しく受け取った値を混ぜる。
     /// 値が取れなかった電池（nil）は前の値をそのまま残すので、接続が切れても最後の値が表示され続ける。
+    /// 手元の値より古い値（別の PC が前に読んだ値など）は無視する。
     mutating func merge(_ update: DeviceUpdate) {
         if let i = devices.firstIndex(where: { $0.id == update.id }) {
             var device = devices[i]
-            device.name = update.name
-            device.symbol = update.symbol
-            device.source = update.source
+            var changed = false
             for part in update.components {
                 guard let level = part.level else { continue }
+                let date = part.date ?? update.date
                 let clamped = max(0, min(100, level))
                 if let j = device.components.firstIndex(where: { $0.id == part.id }) {
+                    guard date >= device.components[j].updatedAt else { continue }
                     device.components[j].level = clamped
                     device.components[j].charging = part.charging
                     device.components[j].label = part.label
-                    device.components[j].updatedAt = update.date
+                    device.components[j].updatedAt = date
                 } else {
-                    device.components.append(BatteryComponent(id: part.id, label: part.label, level: clamped, charging: part.charging, updatedAt: update.date))
+                    device.components.append(BatteryComponent(id: part.id, label: part.label, level: clamped, charging: part.charging, updatedAt: date))
                 }
+                changed = true
+                if date > device.updatedAt { device.updatedAt = date }
             }
-            if update.components.contains(where: { $0.level != nil }) {
-                device.updatedAt = update.date
+            if changed {
+                device.name = update.name
+                device.symbol = update.symbol
+                device.source = update.source
             }
             devices[i] = device
         } else {
             let parts = update.components.compactMap { part -> BatteryComponent? in
                 guard let level = part.level else { return nil }
-                return BatteryComponent(id: part.id, label: part.label, level: max(0, min(100, level)), charging: part.charging, updatedAt: update.date)
+                return BatteryComponent(id: part.id, label: part.label, level: max(0, min(100, level)), charging: part.charging, updatedAt: part.date ?? update.date)
             }
             guard !parts.isEmpty else { return }
-            devices.append(DeviceRecord(id: update.id, name: update.name, kind: update.kind, symbol: update.symbol, components: parts, updatedAt: update.date, source: update.source, customName: nil))
+            let latest = parts.map(\.updatedAt).max() ?? update.date
+            devices.append(DeviceRecord(id: update.id, name: update.name, kind: update.kind, symbol: update.symbol, components: parts, updatedAt: latest, source: update.source, customName: nil))
         }
     }
 }
@@ -111,6 +121,12 @@ extension Snapshot {
             devices[i] = d
         }
         savedAt = max(savedAt, other.savedAt)
+        if relayTopic == nil { relayTopic = other.relayTopic }
+        if let oc = other.computers {
+            var c = computers ?? [:]
+            for (k, v) in oc where v > (c[k] ?? .distantPast) { c[k] = v }
+            computers = c
+        }
     }
 }
 
@@ -121,6 +137,8 @@ struct DeviceUpdate: Equatable {
         var label: String
         var level: Int?
         var charging: Bool
+        /// この電池を実際に読み取った時刻（なければ update.date）
+        var date: Date? = nil
     }
 
     var id: String

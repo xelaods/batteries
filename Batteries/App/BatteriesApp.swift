@@ -14,7 +14,7 @@ struct BatteriesApp: App {
                 .onChange(of: scenePhase) { _, phase in
                     switch phase {
                     case .active: model.becameActive()
-                    case .background: model.stopScan()
+                    case .background: model.becameInactive()
                     default: break
                     }
                 }
@@ -25,7 +25,7 @@ struct BatteriesApp: App {
 /// ショートカット：アプリを開いて読み取る（オートメーションから使える）
 struct RefreshBatteriesIntent: AppIntent {
     static var title: LocalizedStringResource = "バッテリーを更新"
-    static var description = IntentDescription("アプリを開いて、近くの AirPods などの電池残量を読み取ります。")
+    static var description = IntentDescription("アプリを開いて、PC から届いた電池残量を受け取ります。")
     static var openAppWhenRun: Bool = true
 
     @MainActor

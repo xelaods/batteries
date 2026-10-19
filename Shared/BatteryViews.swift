@@ -115,20 +115,25 @@ enum DemoData {
             DeviceRecord(id: "iphone", name: "iPhone", kind: .iphone, symbol: "iphone",
                          components: [.init(id: "main", label: "本体", level: 64, charging: false, updatedAt: now)],
                          updatedAt: now, source: "iPhone"),
-            DeviceRecord(id: "airpods-1420", name: "陽翔のAirPods Pro", kind: .airpods, symbol: "airpodspro",
+            DeviceRecord(id: "airpods-1420", name: "AirPods Pro（第2世代）", kind: .airpods, symbol: "airpodspro",
                          components: [
                             .init(id: "left", label: "左", level: 80, charging: false, updatedAt: now.addingTimeInterval(-3 * 3600)),
                             .init(id: "right", label: "右", level: 70, charging: false, updatedAt: now.addingTimeInterval(-3 * 3600)),
                             .init(id: "case", label: "ケース", level: 40, charging: false, updatedAt: now.addingTimeInterval(-5 * 3600)),
                          ],
-                         updatedAt: now.addingTimeInterval(-3 * 3600), source: "AirPods の電波"),
-            DeviceRecord(id: "pc", name: "ノートPC", kind: .computer, symbol: "laptopcomputer",
+                         updatedAt: now.addingTimeInterval(-3 * 3600), source: "PC（HARUTO-NOTE）"),
+            DeviceRecord(id: "pc-haruto-note", name: "HARUTO-NOTE", kind: .computer, symbol: "laptopcomputer",
                          components: [.init(id: "main", label: "本体", level: 18, charging: true, updatedAt: now.addingTimeInterval(-8 * 60))],
-                         updatedAt: now.addingTimeInterval(-8 * 60), source: "PC"),
-            DeviceRecord(id: "mouse", name: "VXE マウス", kind: .mouse, symbol: "computermouse",
+                         updatedAt: now.addingTimeInterval(-8 * 60), source: "PC（HARUTO-NOTE）"),
+            DeviceRecord(id: "pc-school-pc", name: "SCHOOL-PC", kind: .computer, symbol: "laptopcomputer",
+                         components: [.init(id: "main", label: "本体", level: 92, charging: false, updatedAt: now.addingTimeInterval(-50 * 3600))],
+                         updatedAt: now.addingTimeInterval(-50 * 3600), source: "PC（SCHOOL-PC）"),
+            DeviceRecord(id: "mouse-vxe", name: "VXE マウス", kind: .mouse, symbol: "computermouse",
                          components: [.init(id: "main", label: "本体", level: 55, charging: false, updatedAt: now.addingTimeInterval(-26 * 3600))],
-                         updatedAt: now.addingTimeInterval(-26 * 3600), source: "PC"),
+                         updatedAt: now.addingTimeInterval(-26 * 3600), source: "PC（HARUTO-NOTE）"),
         ]
+        s.relayTopic = "bat-7k2m9qx4vd8pn3hr"
+        s.computers = ["HARUTO-NOTE": now.addingTimeInterval(-8 * 60), "SCHOOL-PC": now.addingTimeInterval(-50 * 3600)]
         s.savedAt = now
         return s
     }

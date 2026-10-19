@@ -3,7 +3,9 @@ name: iOS Build
 on:
   push:
     branches: [main]
+    paths-ignore: ["pc/**", ".github/workflows/windows.yml"]
   pull_request:
+    paths-ignore: ["pc/**"]
   workflow_dispatch:
 
 concurrency:
@@ -61,7 +63,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/shots"
           for mode in light dark; do
             xcrun simctl ui "$UDID" appearance $mode
-            for spec in "1-home|home" "2-detail|detail" "3-diagnostics|diag" "4-settings|settings" "5-widgets|gallery"; do
+            for spec in "1-home|home" "2-detail|detail" "3-connect|connect" "4-settings|settings" "5-widgets|gallery"; do
               name=${spec%%|*}; screen=${spec#*|}
               xcrun simctl terminate "$UDID" com.xelaods.batteries || true
               xcrun simctl launch "$UDID" com.xelaods.batteries -demo -screen $screen

@@ -13,7 +13,7 @@ struct RootView: View {
     var body: some View {
         NavigationStack {
             switch initialScreen {
-            case "diag": DiagnosticsView()
+            case "connect": ConnectionView()
             case "settings": SettingsView()
             case "gallery": WidgetGalleryView()
             case "detail":

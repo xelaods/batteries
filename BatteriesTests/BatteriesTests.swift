@@ -159,32 +159,53 @@ final class SnapshotMergeTests: XCTestCase {
     }
 }
 
-final class BatteryCenterTests: XCTestCase {
-    func testGroupsAirPodsParts() {
-        let entries: [BatteryCenterReader.Entry] = [
-            .init(id: "a", name: "AirPods Pro", level: 80, charging: false, isInternal: false, part: "left", summary: ""),
-            .init(id: "b", name: "AirPods Pro", level: 70, charging: true, isInternal: false, part: "right", summary: ""),
-            .init(id: "c", name: "AirPods Pro", level: 40, charging: false, isInternal: false, part: "case", summary: ""),
-            .init(id: "d", name: "iPhone", level: 50, charging: false, isInternal: true, part: nil, summary: ""),
-            .init(id: "e", name: "Magic Keyboard", level: 33, charging: false, isInternal: false, part: nil, summary: ""),
-        ]
-        let updates = BatteryCenterReader.updates(from: entries, date: Date())
-        XCTAssertEqual(updates.count, 2)
-        let pods = updates.first { $0.name == "AirPods Pro" }!
-        XCTAssertEqual(pods.kind, .airpods)
-        XCTAssertEqual(Set(pods.components.map(\.id)), ["left", "right", "case"])
-        var s = Snapshot()
-        for u in updates { s.merge(u) }
-        XCTAssertEqual(s.items.count, 3) // イヤホン・ケース・キーボード
+final class RelayTests: XCTestCase {
+    private func line(time: Double, _ body: String) -> String {
+        let escaped = body.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+        return "{\"id\":\"x\",\"time\":\(Int(time)),\"event\":\"message\",\"topic\":\"bat-test1234\",\"message\":\"\(escaped)\"}"
     }
 
-    func testUnknownPartsStillShown() {
-        let entries: [BatteryCenterReader.Entry] = [
-            .init(id: "a", name: "AirPods", level: 80, charging: false, isInternal: false, part: nil, summary: ""),
-            .init(id: "b", name: "AirPods", level: 60, charging: false, isInternal: false, part: nil, summary: ""),
-        ]
+    func testParseAndApply() {
+        let a = #"{"v":1,"pc":"NOTE","at":2000,"devices":[{"id":"pc-note","name":"NOTE","kind":"computer","symbol":"laptopcomputer","parts":[{"id":"main","level":81,"charging":true,"at":2000}]},{"id":"airpods-1420","kind":"airpods","model":5152,"parts":[{"id":"left","level":80,"at":1900},{"id":"right","level":70,"at":1900},{"id":"case","level":40,"at":1500}]}]}"#
+        // 別の PC が、もっと前に読んだ AirPods の値を後から送ってきた
+        let b = #"{"v":1,"pc":"DESK","at":2100,"devices":[{"id":"airpods-1420","kind":"airpods","model":5152,"parts":[{"id":"left","level":10,"at":1000},{"id":"case","level":90,"at":1800}]}]}"#
+        let text = [line(time: 2000, a), #"{"id":"k","time":2050,"event":"keepalive","topic":"t"}"#, line(time: 2100, b)].joined(separator: "\n")
+        let received = RelayClient.parse(Data(text.utf8))
+        XCTAssertEqual(received.count, 2)
+
         var s = Snapshot()
-        for u in BatteryCenterReader.updates(from: entries, date: Date()) { s.merge(u) }
-        XCTAssertEqual(s.items.count, 2)
+        RelayClient.apply(received, to: &s)
+        let pc = s.devices.first { $0.id == "pc-note" }
+        XCTAssertEqual(pc?.component("main")?.level, 81)
+        XCTAssertEqual(pc?.component("main")?.charging, true)
+        let pods = s.devices.first { $0.id == "airpods-1420" }
+        XCTAssertEqual(pods?.name, "AirPods Pro（第2世代）")
+        XCTAssertEqual(pods?.component("left")?.level, 80)   // 古い値（at 1000）は無視
+        XCTAssertEqual(pods?.component("case")?.level, 90)   // 新しい値（at 1800）は採用
+        XCTAssertEqual(s.computers?.count, 2)
+    }
+
+    func testSingleBatteryModel() {
+        let msg = RelayMessage(v: 1, pc: "NOTE", at: 100, devices: [
+            .init(id: "airpods-0A20", name: nil, kind: "airpods", symbol: nil, model: 0x0A20, parts: [
+                .init(id: "left", label: nil, level: 60, charging: false, at: 100),
+            ]),
+        ])
+        let u = msg.updates()
+        XCTAssertEqual(u.first?.components.map(\.id), ["main"])
+        XCTAssertEqual(u.first?.components.first?.level, 60)
+    }
+
+    func testNormalizeTopic() {
+        XCTAssertEqual(RelayClient.normalizeTopic("batteries://pair?code=bat-7k2m9qx4vd8pn3hr"), "bat-7k2m9qx4vd8pn3hr")
+        XCTAssertEqual(RelayClient.normalizeTopic(" BAT-7K2M 9QX4 VD8P N3HR "), "bat-7k2m9qx4vd8pn3hr")
+        XCTAssertNil(RelayClient.normalizeTopic("abc"))
+        XCTAssertNil(RelayClient.normalizeTopic("bat-日本語のコード"))
+    }
+
+    func testOldSnapshotStillDecodes() throws {
+        let json = #"{"devices":[],"savedAt":"2026-10-19T00:00:00Z"}"#
+        let s = try SharedStore.decoder.decode(Snapshot.self, from: Data(json.utf8))
+        XCTAssertNil(s.relayTopic)
     }
 }

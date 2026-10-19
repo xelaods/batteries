@@ -1,0 +1,52 @@
+name: Windows Build
+
+on:
+  push:
+    branches: [main]
+    paths: ["pc/**", ".github/workflows/windows.yml"]
+  pull_request:
+    paths: ["pc/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build exe
+        shell: pwsh
+        run: |
+          dotnet publish pc/BatteriesPC/BatteriesPC.csproj -c Release -o out -p:Version=1.0.${{ github.run_number }}
+          Get-ChildItem out
+          Copy-Item out/BatteriesPC.exe "BatteriesPC-${{ github.run_number }}.exe"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          path: BatteriesPC-${{ github.run_number }}.exe
+          archive: false
+          retention-days: 14
+
+      - name: Attach to release
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: pc-build-${{ github.run_number }}
+          name: バッテリー送信（Windows）build ${{ github.run_number }}
+          body: |
+            Windows 用の常駐アプリです。ダウンロードしてそのまま起動してください（インストール不要）。
+            初回は「Windows によって PC が保護されました」と出ることがあります。その場合は「詳細情報」→「実行」を押してください。
+          files: BatteriesPC-${{ github.run_number }}.exe
+          make_latest: false

@@ -1,44 +1,38 @@
 import Foundation
 import CoreBluetooth
 
-/// 周りの電波を受け取り、つながっている BLE 機器の電池（標準の電池サービス）を読む
+/// iPhone につながっている BLE 機器（キーボードなど）のうち、標準の電池サービスを持つものの電池を読む。
+/// （AirPods は iOS がアプリに値を渡さないので、PC 経由で受け取る）
 final class BluetoothScanner: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     static let batteryService = CBUUID(string: "180F")
     static let batteryLevel = CBUUID(string: "2A19")
 
-    /// 電波を受け取ったとき（機器ID、製造者データ、電波の強さ、名前）
-    var onAdvertisement: ((UUID, [UInt8]?, Int, String?) -> Void)?
-    /// BLE 機器の電池を読めたとき（機器ID、名前、0〜100）
+    /// 電池を読めたとき（機器ID、名前、0〜100）
     var onBatteryLevel: ((UUID, String, Int) -> Void)?
     var onStateChange: ((CBManagerState) -> Void)?
 
     private var central: CBCentralManager?
-    private var wantsScan = false
+    private var wantsRead = false
     private var peripherals: [UUID: CBPeripheral] = [:]
 
-    var state: CBManagerState { central?.state ?? .unknown }
-
     func start() {
-        wantsScan = true
+        wantsRead = true
         if central == nil {
             central = CBCentralManager(delegate: self, queue: .main)
         } else {
-            beginIfReady()
+            readIfReady()
         }
     }
 
     func stop() {
-        wantsScan = false
+        wantsRead = false
         guard let central else { return }
-        if central.state == .poweredOn { central.stopScan() }
         for p in peripherals.values { central.cancelPeripheralConnection(p) }
         peripherals.removeAll()
     }
 
-    private func beginIfReady() {
-        guard wantsScan, let central, central.state == .poweredOn else { return }
-        central.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: true])
-        // iPhone につながっている機器のうち、標準の電池サービスを持つもの
+    private func readIfReady() {
+        guard wantsRead, let central, central.state == .poweredOn else { return }
         for p in central.retrieveConnectedPeripherals(withServices: [Self.batteryService]) where peripherals[p.identifier] == nil {
             peripherals[p.identifier] = p
             p.delegate = self
@@ -50,13 +44,7 @@ final class BluetoothScanner: NSObject, CBCentralManagerDelegate, CBPeripheralDe
 
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         onStateChange?(central.state)
-        beginIfReady()
-    }
-
-    func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
-        let data = (advertisementData[CBAdvertisementDataManufacturerDataKey] as? Data).map { [UInt8]($0) }
-        let name = advertisementData[CBAdvertisementDataLocalNameKey] as? String ?? peripheral.name
-        onAdvertisement?(peripheral.identifier, data, RSSI.intValue, name)
+        readIfReady()
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {

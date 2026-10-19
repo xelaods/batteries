@@ -46,7 +46,7 @@ targets:
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         ITSAppUsesNonExemptEncryption: false
-        NSBluetoothAlwaysUsageDescription: AirPods などの近くの機器が発信している電池残量を読み取るために Bluetooth を使います。
+        NSBluetoothAlwaysUsageDescription: iPhone につながっている Bluetooth キーボードなどの電池残量を読み取るために Bluetooth を使います。
         NSCalendarsFullAccessUsageDescription: ウィジェットに電池残量を渡すため、カレンダーの2001年1月3日にメモを1件だけ保存します。ほかの予定を読んだり書き換えたりはしません。
         NSCalendarsUsageDescription: ウィジェットに電池残量を渡すため、カレンダーにメモを1件だけ保存します。
         CFBundleURLTypes:

@@ -18,23 +18,26 @@ struct BatteriesProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<BatteriesEntry>) -> Void) {
-        let now = Date()
-        var snapshot = SharedStore.loadForWidget()
-        // ウィジェット自身でも iOS の電池情報を読み、つながっている機器の値を更新する
-        let (_, live) = BatteryCenterReader.read()
-        let updates = BatteryCenterReader.updates(from: live, date: now)
-        if !updates.isEmpty {
-            var s = snapshot ?? Snapshot()
-            for u in updates { s.merge(u) }
-            s.savedAt = now
-            SharedStore.saveFromWidget(s)
-            snapshot = s
+        Task {
+            let now = Date()
+            var snapshot = SharedStore.loadForWidget()
+            // ウィジェット自身でも PC からの値を取りに行く（アプリを開かなくても更新される）
+            if var s = snapshot, let topic = s.relayTopic,
+               let received = try? await RelayClient.fetch(topic: topic, timeout: 8), !received.isEmpty {
+                let before = s
+                RelayClient.apply(received, to: &s)
+                if s != before {
+                    s.savedAt = now
+                    SharedStore.saveFromWidget(s)
+                }
+                snapshot = s
+            }
+            // 15分ごとに読み直しを頼む（実際の間隔は iOS が決める）。「◯分前」の表示も進める
+            let entries = (0..<4).map { i in
+                BatteriesEntry(date: now.addingTimeInterval(Double(i) * 5 * 60), snapshot: snapshot)
+            }
+            completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(15 * 60))))
         }
-        // 15分ごとに読み直しを頼む（実際の間隔は iOS が決める）。「◯分前」の表示も進める
-        let entries = (0..<4).map { i in
-            BatteriesEntry(date: now.addingTimeInterval(Double(i) * 5 * 60), snapshot: snapshot)
-        }
-        completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(15 * 60))))
     }
 }
 
@@ -56,7 +59,7 @@ struct BatteriesWidgetView: View {
 
     var body: some View {
         content
-            .widgetURL(URL(string: "batteries://scan"))
+            .widgetURL(URL(string: "batteries://refresh"))
     }
 
     @ViewBuilder private var content: some View {
@@ -80,7 +83,7 @@ struct BatteriesWidget: Widget {
             BatteriesWidgetView(entry: entry)
         }
         .configurationDisplayName("バッテリー")
-        .description("接続が切れても、最後に読み取った電池残量を表示し続けます。")
+        .description("iPhone・PC・AirPods・マウスの電池残量。接続が切れても最後の値を表示し続けます。")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .accessoryRectangular, .accessoryCircular, .accessoryInline])
     }
 }

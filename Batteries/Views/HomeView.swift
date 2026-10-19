@@ -17,7 +17,7 @@ struct HomeView: View {
                         ContentUnavailableView {
                             Label("まだ記録がありません", systemImage: "battery.0percent")
                         } description: {
-                            Text("AirPods のケースを開けて iPhone の近くに置き、「今すぐ読み取る」を押してください。")
+                            Text("PC の常駐アプリとつなぐと、AirPods・PC・マウスの残量がここに並びます。")
                         }
                     }
                 } else {
@@ -32,7 +32,7 @@ struct HomeView: View {
 
                 Section {
                 } footer: {
-                    Text("接続が切れても、最後に読み取った値を表示し続けます。AirPods はアプリを開いている間だけ読み取れるので、ウィジェットをタップするとアプリが開いて更新されます。")
+                    Text("接続が切れても、最後に受け取った値を表示し続けます。ウィジェットも自分で PC の値を受け取りに行きます（間隔は iOS が決めます）。")
                 }
             }
             .listSectionSpacing(14)
@@ -42,17 +42,16 @@ struct HomeView: View {
             DeviceDetailView(deviceID: id)
         }
         .refreshable {
-            model.startScan(seconds: 10)
-            try? await Task.sleep(for: .seconds(1.5))
+            await model.refresh()
         }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 NavigationLink {
-                    DiagnosticsView()
+                    ConnectionView()
                 } label: {
-                    Image(systemName: "waveform.path.ecg")
+                    Image(systemName: "laptopcomputer.and.iphone")
                 }
-                .accessibilityLabel("診断")
+                .accessibilityLabel("PC 連携")
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -66,71 +65,87 @@ struct HomeView: View {
         .sheet(isPresented: $showSettings) {
             NavigationStack { SettingsView() }
         }
+        .alert("PC とつながりました", isPresented: Binding(get: { model.pairedJustNow }, set: { model.pairedJustNow = $0 })) {
+            Button("OK") {}
+        } message: {
+            Text("PC から届いた残量を受け取ります。")
+        }
     }
 }
 
-/// 読み取り中かどうかと、Bluetooth の状態
+/// PC からの受け取りの状態
 struct ScanStatusRow: View {
     @Environment(AppModel.self) private var model
     var now: Date
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
-                if model.scanning {
-                    ProgressView()
-                        .frame(width: 28)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("近くの機器を読み取り中…")
-                            .font(.subheadline.weight(.medium))
-                        Text("AirPods はケースを開けると見つかりやすくなります")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button("止める") { model.stopScan() }
-                        .font(.subheadline)
-                        .buttonStyle(.borderless)
-                } else {
-                    Image(systemName: "dot.radiowaves.left.and.right")
+        if model.relayTopic == nil {
+            NavigationLink {
+                ConnectionView()
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "laptopcomputer.and.iphone")
                         .font(.title3)
                         .foregroundStyle(.tint)
-                        .frame(width: 28)
+                        .frame(width: 32)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("今すぐ読み取る")
+                        Text("PC とつなぐ")
                             .font(.subheadline.weight(.medium))
-                        Text(model.lastScanAt.map { "前回 \(BatteryStyle.ago($0, now: now))" } ?? "アプリを開くと自動で読み取ります")
+                        Text("AirPods・PC・マウスの残量は PC から受け取ります")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    Spacer()
-                    Button {
-                        model.startScan(seconds: 12)
-                    } label: {
-                        Text("読み取る")
-                            .font(.subheadline.weight(.semibold))
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .buttonBorderShape(.capsule)
-                    .controlSize(.small)
                 }
+                .padding(.vertical, 2)
             }
-            if let warning = bluetoothWarning {
-                Label(warning, systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
+        } else {
+            HStack(spacing: 12) {
+                Group {
+                    if model.refreshing {
+                        ProgressView()
+                    } else if model.relayError != nil {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                    } else {
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    }
+                }
+                .font(.title3)
+                .frame(width: 32)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.subheadline.weight(.medium))
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+                Spacer()
+                Button {
+                    Task { await model.refresh() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.circle)
+                .disabled(model.refreshing)
+                .accessibilityLabel("今すぐ受け取る")
             }
+            .padding(.vertical, 2)
         }
-        .padding(.vertical, 2)
     }
 
-    private var bluetoothWarning: String? {
-        switch model.bluetoothState {
-        case .poweredOff: return "Bluetooth がオフです。コントロールセンターでオンにしてください。"
-        case .unauthorized: return "Bluetooth の使用が許可されていません。設定アプリ › バッテリー で許可してください。"
-        case .unsupported: return "この端末では Bluetooth を使えません。"
-        default: return nil
-        }
+    private var title: String {
+        if model.refreshing { return "PC から受け取り中…" }
+        if model.relayError != nil { return "受け取れませんでした" }
+        return "PC と連携中"
+    }
+
+    private var subtitle: String {
+        if let e = model.relayError { return e }
+        let pcs = (model.snapshot.computers ?? [:]).count
+        let last = model.lastRefreshAt.map { "前回 \(BatteryStyle.ago($0, now: now))" } ?? "下に引っぱると受け取ります"
+        return pcs > 0 ? "\(pcs)台の PC・\(last)" : last
     }
 }
 
