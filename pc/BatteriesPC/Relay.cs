@@ -25,7 +25,15 @@ public sealed record RelayMessage(
     [property: JsonPropertyName("v")] int V,
     [property: JsonPropertyName("pc")] string Pc,
     [property: JsonPropertyName("at")] long At,
-    [property: JsonPropertyName("devices")] List<RelayDevice> Devices);
+    [property: JsonPropertyName("devices")] List<RelayDevice> Devices)
+{
+    /// <summary>PC を見分ける変わらない ID</summary>
+    [JsonPropertyName("pcId")] public string? PcId { get; init; }
+    /// <summary>前に使っていた機器 ID（iPhone 側で今の ID にまとめる）</summary>
+    [JsonPropertyName("formerIds")] public List<string>? FormerIds { get; init; }
+    /// <summary>前に使っていた PC の名前</summary>
+    [JsonPropertyName("formerNames")] public List<string>? FormerNames { get; init; }
+}
 
 /// <summary>ntfy.sh に送る</summary>
 public sealed class Relay

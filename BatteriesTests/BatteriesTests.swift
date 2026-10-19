@@ -208,4 +208,30 @@ final class RelayTests: XCTestCase {
         let s = try SharedStore.decoder.decode(Snapshot.self, from: Data(json.utf8))
         XCTAssertNil(s.relayTopic)
     }
+
+    func testRenamedPcIsMerged() {
+        // 古い版：名前から ID を作っていた（最初は MACHINE、名前を変えて NOTE）
+        let old1 = #"{"v":1,"pc":"MACHINE","at":1000,"devices":[{"id":"pc-machine","name":"MACHINE","kind":"computer","parts":[{"id":"main","level":50,"at":1000}]}]}"#
+        let old2 = #"{"v":1,"pc":"NOTE","at":2000,"devices":[{"id":"pc-note","name":"NOTE","kind":"computer","parts":[{"id":"main","level":60,"at":2000}]}]}"#
+        // 新しい版：変わらない ID と、前の ID・名前を一緒に送る
+        let new = #"{"v":1,"pc":"NOTE","pcId":"machine","formerIds":["pc-note"],"formerNames":["MACHINE"],"at":3000,"devices":[{"id":"pc-machine","name":"NOTE","kind":"computer","parts":[{"id":"main","level":70,"at":3000}]}]}"#
+        let text = [line(time: 1000, old1), line(time: 2000, old2), line(time: 3000, new)].joined(separator: "\n")
+        var s = Snapshot()
+        RelayClient.apply(RelayClient.parse(Data(text.utf8)), to: &s)
+        let pcs = s.devices.filter { $0.kind == .computer }
+        XCTAssertEqual(pcs.count, 1)
+        XCTAssertEqual(pcs.first?.id, "pc-machine")
+        XCTAssertEqual(pcs.first?.name, "NOTE")
+        XCTAssertEqual(pcs.first?.component("main")?.level, 70)
+        XCTAssertEqual(s.computers?.keys.sorted(), ["machine"])
+        XCTAssertEqual(s.computerNames?["machine"], "NOTE")
+
+        // 中継に残っていた古いメッセージをもう一度受け取っても、2台に戻らない
+        let replay = [line(time: 1000, old1), line(time: 2000, old2), line(time: 3000, new)].joined(separator: "\n")
+        RelayClient.apply(RelayClient.parse(Data(replay.utf8)), to: &s)
+        XCTAssertEqual(s.devices.filter { $0.kind == .computer }.count, 1)
+        XCTAssertEqual(s.computers?.keys.sorted(), ["machine"])
+        XCTAssertEqual(s.computerNames?["machine"], "NOTE")
+        XCTAssertEqual(s.devices.first { $0.kind == .computer }?.component("main")?.level, 70)
+    }
 }

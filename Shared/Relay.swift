@@ -27,6 +27,15 @@ struct RelayMessage: Codable, Equatable {
     var pc: String
     var at: Double?
     var devices: [Device]
+    /// PC を見分ける変わらない ID（古い版の PC アプリにはない）
+    var pcId: String? = nil
+    /// 前に使っていた機器 ID
+    var formerIds: [String]? = nil
+    /// 前に使っていた PC の名前
+    var formerNames: [String]? = nil
+
+    /// PC 一覧で使うキー
+    var computerKey: String { pcId ?? pc }
 
     static func label(for partID: String) -> String {
         switch partID {
@@ -137,11 +146,42 @@ enum RelayClient {
 
     /// 受け取った値を記録に混ぜる
     static func apply(_ received: [Received], to snapshot: inout Snapshot) {
-        var computers = snapshot.computers ?? [:]
         for r in received {
-            for u in r.message.updates() { snapshot.merge(u) }
-            if r.time > (computers[r.message.pc] ?? .distantPast) { computers[r.message.pc] = r.time }
+            let m = r.message
+            if let pcId = m.pcId {
+                // 名前を変えた PC：前の ID の記録を今の ID にまとめ、前の名前を PC 一覧から消す
+                let current = "pc-" + pcId
+                for old in m.formerIds ?? [] { snapshot.retire(old, into: current) }
+                // 古い版は PC の名前をキーにしていたので、今の名前のキーも消す
+                for name in (m.formerNames ?? []) + [m.pc] where name != pcId {
+                    snapshot.computers?[name] = nil
+                    snapshot.computerNames?[name] = nil
+                }
+            }
+            for u in m.updates() { snapshot.merge(snapshot.redirected(u)) }
+            var key = m.computerKey
+            var updatesName = true
+            if m.pcId == nil, let pcDevice = m.devices.first(where: { $0.kind == DeviceKind.computer.rawValue }) {
+                // 古い版の PC アプリのメッセージ：今の ID を持つ PC のものなら、そちらにまとめる
+                let target = snapshot.redirectedID(pcDevice.id)
+                if target.hasPrefix("pc-") {
+                    let pid = String(target.dropFirst(3))
+                    if pid != m.pc, snapshot.computers?[pid] != nil {
+                        key = pid
+                        updatesName = false
+                    }
+                }
+            }
+            var computers = snapshot.computers ?? [:]
+            if r.time > (computers[key] ?? .distantPast) {
+                computers[key] = r.time
+                if updatesName {
+                    var names = snapshot.computerNames ?? [:]
+                    names[key] = m.pc
+                    snapshot.computerNames = names
+                }
+            }
+            snapshot.computers = computers
         }
-        snapshot.computers = computers
     }
 }

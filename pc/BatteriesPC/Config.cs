@@ -25,8 +25,14 @@ public sealed class Config
 {
     /// <summary>iPhone と共有する合言葉（ntfy.sh のトピック名）</summary>
     public string Topic { get; set; } = "";
-    /// <summary>iPhone に表示する PC の名前</summary>
+    /// <summary>iPhone に表示する PC の名前（変えても同じ PC として扱われる）</summary>
     public string PcName { get; set; } = Environment.MachineName;
+    /// <summary>PC を見分けるための変わらない ID（名前を変えても変わらない）</summary>
+    public string PcId { get; set; } = "";
+    /// <summary>前に使っていた機器 ID（iPhone 側で今の ID にまとめてもらう）</summary>
+    public List<string> FormerIds { get; set; } = new();
+    /// <summary>前に使っていた名前（iPhone の PC 一覧から消してもらう）</summary>
+    public List<string> FormerNames { get; set; } = new();
     /// <summary>この強さ（dBm）より弱い AirPods の電波は他人のものとして無視する</summary>
     public int RssiThreshold { get; set; } = -70;
     /// <summary>左右が逆に表示されるときの切り替え</summary>
@@ -56,6 +62,14 @@ public sealed class Config
                 {
                     if (!IsValidTopic(c.Topic)) c.Topic = NewTopic();
                     if (string.IsNullOrWhiteSpace(c.PcName)) c.PcName = Environment.MachineName;
+                    if (string.IsNullOrWhiteSpace(c.PcId))
+                    {
+                        // 以前の版は名前から ID を作っていた。名前を変えて別の PC に見えている分もまとめる
+                        c.PcId = Collector.Slug(Environment.MachineName);
+                        c.RememberFormer("pc-" + Collector.Slug(c.PcName), c.PcName);
+                        if (c.PcName != Environment.MachineName) c.RememberFormer(null, Environment.MachineName);
+                        c.Save();
+                    }
                     return c;
                 }
             }
@@ -64,9 +78,21 @@ public sealed class Config
         {
             // 壊れていたら作り直す
         }
-        var fresh = new Config { Topic = NewTopic(), IsNew = true };
+        var fresh = new Config { Topic = NewTopic(), PcId = Collector.Slug(Environment.MachineName), IsNew = true };
         fresh.Save();
         return fresh;
+    }
+
+    [JsonIgnore] public string DeviceId => "pc-" + PcId;
+
+    /// <summary>前の ID・名前を覚えておく（今の ID・名前と同じものは除く）</summary>
+    public void RememberFormer(string? id, string? name)
+    {
+        if (id != null && id != DeviceId && !FormerIds.Contains(id)) FormerIds.Add(id);
+        if (name != null && name != PcName && !FormerNames.Contains(name)) FormerNames.Add(name);
+        FormerNames.Remove(PcName);
+        if (FormerIds.Count > 10) FormerIds.RemoveRange(0, FormerIds.Count - 10);
+        if (FormerNames.Count > 10) FormerNames.RemoveRange(0, FormerNames.Count - 10);
     }
 
     readonly object _saveLock = new();

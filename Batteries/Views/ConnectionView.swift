@@ -54,7 +54,7 @@ struct ConnectionView: View {
                                 HStack {
                                     Image(systemName: "laptopcomputer")
                                         .frame(width: 28)
-                                    Text(pc.key)
+                                    Text(model.snapshot.computerNames?[pc.key] ?? pc.key)
                                     Spacer()
                                     Text(BatteryStyle.ago(pc.value, now: context.date))
                                         .font(.subheadline)

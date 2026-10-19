@@ -184,7 +184,9 @@ public sealed class TrayContext : ApplicationContext
     {
         name = name.Trim();
         if (name.Length == 0 || name == _config.PcName) return;
+        var old = _config.PcName;
         _config.PcName = name;
+        _config.RememberFormer(null, old);
         _config.Save();
         _lastSignature = "";
         _ = SendAsync(force: true);

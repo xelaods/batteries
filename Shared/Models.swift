@@ -52,8 +52,12 @@ struct Snapshot: Codable, Equatable {
     var savedAt: Date = .distantPast
     /// PC から値を受け取る中継の合言葉（ウィジェットにも渡すためここに持つ）
     var relayTopic: String?
-    /// PC ごとの最後に受け取った時刻（PC の名前 → 時刻）
+    /// PC ごとの最後に受け取った時刻（PC の ID → 時刻。古い版では名前 → 時刻）
     var computers: [String: Date]?
+    /// PC の ID → 表示する名前
+    var computerNames: [String: String]?
+    /// 前に使われていた機器 ID → 今の機器 ID（PC の名前を変えたときなど）
+    var redirects: [String: String]?
 
     /// 新しく受け取った値を混ぜる。
     /// 値が取れなかった電池（nil）は前の値をそのまま残すので、接続が切れても最後の値が表示され続ける。
@@ -124,9 +128,68 @@ extension Snapshot {
         if relayTopic == nil { relayTopic = other.relayTopic }
         if let oc = other.computers {
             var c = computers ?? [:]
-            for (k, v) in oc where v > (c[k] ?? .distantPast) { c[k] = v }
+            for (k, v) in oc where v > (c[k] ?? .distantPast) {
+                c[k] = v
+                if let name = other.computerNames?[k] {
+                    var names = computerNames ?? [:]
+                    names[k] = name
+                    computerNames = names
+                }
+            }
             computers = c
         }
+        if let or = other.redirects {
+            var r = redirects ?? [:]
+            for (k, v) in or where r[k] == nil { r[k] = v }
+            redirects = r
+            for (from, to) in r { retire(from, into: to) }
+        }
+    }
+}
+
+extension Snapshot {
+    /// 前の機器 ID の記録を今の ID にまとめる（今の ID の方が新しい値ならそちらを残す）
+    mutating func retire(_ oldID: String, into newID: String) {
+        guard oldID != newID else { return }
+        var r = redirects ?? [:]
+        r[oldID] = newID
+        redirects = r
+        guard let i = devices.firstIndex(where: { $0.id == oldID }) else { return }
+        let old = devices.remove(at: i)
+        if let j = devices.firstIndex(where: { $0.id == newID }) {
+            var d = devices[j]
+            for oc in old.components {
+                if let k = d.components.firstIndex(where: { $0.id == oc.id }) {
+                    if oc.updatedAt > d.components[k].updatedAt { d.components[k] = oc }
+                } else {
+                    d.components.append(oc)
+                }
+            }
+            if d.customName == nil { d.customName = old.customName }
+            d.updatedAt = max(d.updatedAt, old.updatedAt)
+            devices[j] = d
+        } else {
+            var moved = old
+            moved.id = newID
+            devices.append(moved)
+        }
+    }
+
+    /// 前の ID を今の ID に向け直す
+    func redirectedID(_ id: String) -> String {
+        var current = id
+        var seen: Set<String> = [id]
+        while let to = redirects?[current], !seen.contains(to) {
+            seen.insert(to)
+            current = to
+        }
+        return current
+    }
+
+    func redirected(_ update: DeviceUpdate) -> DeviceUpdate {
+        var u = update
+        u.id = redirectedID(update.id)
+        return u
     }
 }
 

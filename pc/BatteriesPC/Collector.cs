@@ -42,7 +42,7 @@ public static class Collector
         if (PcBattery.Read() is { } pc)
         {
             devices.Add(new RelayDevice(
-                "pc-" + Slug(config.PcName), config.PcName, "computer", "laptopcomputer", null,
+                config.DeviceId, config.PcName, "computer", "laptopcomputer", null,
                 [new RelayPart("main", "本体", pc.Level, pc.Charging, now)]));
         }
 
@@ -59,7 +59,12 @@ public static class Collector
             devices.Add(new RelayDevice($"airpods-{a.Model:X4}", null, "airpods", null, a.Model, parts));
         }
 
-        return new RelayMessage(1, config.PcName, now, devices);
+        return new RelayMessage(1, config.PcName, now, devices)
+        {
+            PcId = config.PcId,
+            FormerIds = config.FormerIds.Count > 0 ? config.FormerIds.ToList() : null,
+            FormerNames = config.FormerNames.Count > 0 ? config.FormerNames.ToList() : null,
+        };
     }
 
     /// <summary>送るかどうかの判断に使う「中身の要約」（時刻を除いた値）</summary>
