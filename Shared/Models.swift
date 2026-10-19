@@ -86,6 +86,34 @@ struct Snapshot: Codable, Equatable {
     }
 }
 
+extension Snapshot {
+    /// 別の保存先の記録を取り込む。電池ごとに新しい方を残す（ウィジェットが自分で読んだ値とアプリの値を合わせるため）
+    mutating func absorb(_ other: Snapshot) {
+        for od in other.devices {
+            guard let i = devices.firstIndex(where: { $0.id == od.id }) else {
+                devices.append(od)
+                continue
+            }
+            var d = devices[i]
+            for oc in od.components {
+                if let j = d.components.firstIndex(where: { $0.id == oc.id }) {
+                    if oc.updatedAt > d.components[j].updatedAt { d.components[j] = oc }
+                } else {
+                    d.components.append(oc)
+                }
+            }
+            if od.updatedAt > d.updatedAt {
+                d.updatedAt = od.updatedAt
+                d.source = od.source
+                d.name = od.name
+            }
+            if d.customName == nil { d.customName = od.customName }
+            devices[i] = d
+        }
+        savedAt = max(savedAt, other.savedAt)
+    }
+}
+
 /// 読み取った値（電池ごとに nil があり得る）
 struct DeviceUpdate: Equatable {
     struct Part: Equatable {
@@ -148,6 +176,10 @@ extension Snapshot {
                 }
                 if let c = device.component("case"), let level = c.level {
                     result.append(BatteryItem(id: device.id + ".case", deviceID: device.id, title: "ケース", symbol: AirPodsModel.caseSymbol(for: device.symbol), level: level, charging: c.charging, updatedAt: c.updatedAt, detail: nil))
+                }
+                // 左右が見分けられなかった電池はそのまま並べる
+                for c in device.knownComponents where !["left", "right", "main", "case"].contains(c.id) {
+                    result.append(BatteryItem(id: device.id + "." + c.id, deviceID: device.id, title: "\(device.displayName) \(c.label)", symbol: device.symbol, level: c.level ?? 0, charging: c.charging, updatedAt: c.updatedAt, detail: nil))
                 }
             } else {
                 for c in device.knownComponents {

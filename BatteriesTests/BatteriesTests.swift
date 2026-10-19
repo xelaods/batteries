@@ -145,4 +145,46 @@ final class SnapshotMergeTests: XCTestCase {
         XCTAssertEqual(BatteryStyle.ago(now.addingTimeInterval(-12 * 60), now: now), "12分前")
         XCTAssertEqual(BatteryStyle.ago(now.addingTimeInterval(-3 * 3600 - 5), now: now), "3時間前")
     }
+
+    func testAbsorbKeepsNewerPerComponent() {
+        let t0 = Date(timeIntervalSince1970: 1_000), t1 = Date(timeIntervalSince1970: 2_000)
+        var app = Snapshot()
+        app.merge(airpods(left: 80, right: 70, case: 40, at: t1))
+        var widget = Snapshot()
+        widget.merge(airpods(left: 10, right: 10, case: 90, at: t0))
+        widget.devices[0].components[2].updatedAt = Date(timeIntervalSince1970: 3_000)
+        app.absorb(widget)
+        XCTAssertEqual(app.devices[0].component("left")?.level, 80)
+        XCTAssertEqual(app.devices[0].component("case")?.level, 90)
+    }
+}
+
+final class BatteryCenterTests: XCTestCase {
+    func testGroupsAirPodsParts() {
+        let entries: [BatteryCenterReader.Entry] = [
+            .init(id: "a", name: "AirPods Pro", level: 80, charging: false, isInternal: false, part: "left", summary: ""),
+            .init(id: "b", name: "AirPods Pro", level: 70, charging: true, isInternal: false, part: "right", summary: ""),
+            .init(id: "c", name: "AirPods Pro", level: 40, charging: false, isInternal: false, part: "case", summary: ""),
+            .init(id: "d", name: "iPhone", level: 50, charging: false, isInternal: true, part: nil, summary: ""),
+            .init(id: "e", name: "Magic Keyboard", level: 33, charging: false, isInternal: false, part: nil, summary: ""),
+        ]
+        let updates = BatteryCenterReader.updates(from: entries, date: Date())
+        XCTAssertEqual(updates.count, 2)
+        let pods = updates.first { $0.name == "AirPods Pro" }!
+        XCTAssertEqual(pods.kind, .airpods)
+        XCTAssertEqual(Set(pods.components.map(\.id)), ["left", "right", "case"])
+        var s = Snapshot()
+        for u in updates { s.merge(u) }
+        XCTAssertEqual(s.items.count, 3) // イヤホン・ケース・キーボード
+    }
+
+    func testUnknownPartsStillShown() {
+        let entries: [BatteryCenterReader.Entry] = [
+            .init(id: "a", name: "AirPods", level: 80, charging: false, isInternal: false, part: nil, summary: ""),
+            .init(id: "b", name: "AirPods", level: 60, charging: false, isInternal: false, part: nil, summary: ""),
+        ]
+        var s = Snapshot()
+        for u in BatteryCenterReader.updates(from: entries, date: Date()) { s.merge(u) }
+        XCTAssertEqual(s.items.count, 2)
+    }
 }

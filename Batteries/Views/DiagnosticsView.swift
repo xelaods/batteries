@@ -22,7 +22,44 @@ struct DiagnosticsView: View {
                 Text("AirPods のケースを開けて iPhone のすぐ横に置いた状態で調べてください。")
             }
 
-            Section("結果") {
+            Section {
+                switch model.batteryCenterStatus {
+                case .none:
+                    Text("まだ読み取っていません").foregroundStyle(.secondary)
+                case .unavailable(let reason):
+                    Label(reason, systemImage: "xmark.octagon.fill").foregroundStyle(.red)
+                case .ok(let count):
+                    LabeledContent("見つかった電池", value: "\(count)")
+                    if count == 0 {
+                        Text("今つながっている機器がないか、iOS がこの情報を渡していません。AirPods を耳に付けた状態で「30秒間 調べる」を押してください。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(model.batteryCenterEntries) { e in
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack {
+                                Text(e.name).font(.subheadline.weight(.medium))
+                                if let part = e.part { Text(part).font(.caption).foregroundStyle(.secondary) }
+                                if e.isInternal { Text("本体").font(.caption).foregroundStyle(.secondary) }
+                                Spacer()
+                                Text("\(e.level)%\(e.charging ? "⚡︎" : "")").monospacedDigit()
+                            }
+                            Text(e.summary)
+                                .font(.caption2.monospaced())
+                                .foregroundStyle(.secondary)
+                                .lineLimit(6)
+                                .textSelection(.enabled)
+                        }
+                    }
+                }
+                Button("今すぐ読む") { model.readBatteryCenter() }
+            } header: {
+                Text("iOS の電池情報（標準ウィジェットと同じ）")
+            } footer: {
+                Text("AirPods はこちらで読みます。下の「電波」は予備の方法です。")
+            }
+
+            Section("電波") {
                 LabeledContent("Bluetooth", value: stateText(model.bluetoothState))
                 LabeledContent("受け取った電波", value: "\(d.totalAds)")
                 LabeledContent("Apple の電波", value: "\(d.appleAds)")
@@ -33,7 +70,7 @@ struct DiagnosticsView: View {
             }
 
             Section {
-                Text(verdict(d))
+                Text(bcVerdict + "\n" + verdict(d))
                     .font(.subheadline)
             } header: {
                 Text("判定")
@@ -65,6 +102,19 @@ struct DiagnosticsView: View {
         }
         .navigationTitle("診断")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var bcVerdict: String {
+        switch model.batteryCenterStatus {
+        case .ok(let count) where model.batteryCenterEntries.contains(where: { !$0.isInternal }):
+            return "iOS の電池情報から \(count) 件読み取れています。"
+        case .ok:
+            return "iOS の電池情報は使えますが、外部の機器はまだ見つかっていません。"
+        case .unavailable:
+            return "iOS の電池情報は使えませんでした。"
+        case .none:
+            return ""
+        }
     }
 
     private func stateText(_ state: CBManagerState) -> String {

@@ -53,18 +53,42 @@ enum SharedStore {
         CalendarBridge.write(data)
     }
 
-    /// ウィジェット側：App Group → カレンダーのメモ の順に読む
+    /// ウィジェット側：App Group → カレンダーのメモ の順に読み、ウィジェットが自分で読んだ分も合わせる
     static func loadForWidget() -> Snapshot? {
+        var base: Snapshot?
         if isShared,
            let data = try? Data(contentsOf: snapshotURL),
            let s = try? decoder.decode(Snapshot.self, from: data) {
-            return s
+            base = s
+        } else if let data = CalendarBridge.read(),
+                  let s = try? decoder.decode(Snapshot.self, from: data) {
+            base = s
         }
-        if let data = CalendarBridge.read(),
-           let s = try? decoder.decode(Snapshot.self, from: data) {
-            return s
+        if !isShared, let local = loadWidgetLocal() {
+            if base == nil { base = local } else { base?.absorb(local) }
         }
-        return nil
+        return base
+    }
+
+    /// ウィジェットが自分で読んだ値を、ウィジェット自身の保存場所（App Group がないとき）に残す
+    static var widgetLocalURL: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        return base.appendingPathComponent("widget-batteries.json")
+    }
+
+    static func loadWidgetLocal() -> Snapshot? {
+        guard let data = try? Data(contentsOf: widgetLocalURL) else { return nil }
+        return try? decoder.decode(Snapshot.self, from: data)
+    }
+
+    static func saveFromWidget(_ snapshot: Snapshot) {
+        guard let data = try? encoder.encode(snapshot) else { return }
+        if isShared {
+            try? data.write(to: snapshotURL, options: .atomic)
+        } else {
+            try? data.write(to: widgetLocalURL, options: .atomic)
+        }
     }
 }
 

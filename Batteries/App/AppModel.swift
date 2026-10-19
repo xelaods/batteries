@@ -59,6 +59,10 @@ final class AppModel {
     var diagnostics = ScanDiagnostics()
     var calendarStatus: EKAuthorizationStatus = EKEventStore.authorizationStatus(for: .event)
     var connectedAudioName: String?
+    /// iOS の電池情報（BatteryCenter）の読み取り結果
+    var batteryCenterStatus: BatteryCenterReader.Status?
+    var batteryCenterEntries: [BatteryCenterReader.Entry] = []
+    var batteryCenterReadAt: Date?
 
     /// この強さ（dBm）より弱い AirPods の電波は他人のものとして無視する
     var rssiThreshold: Int {
@@ -74,7 +78,7 @@ final class AppModel {
     @ObservationIgnored private var saveTask: Task<Void, Never>?
     /// 機種ごとに、今回いちばん強かった電波（他人の AirPods を混ぜないため）
     @ObservationIgnored private var strongest: [UInt16: (id: UUID, rssi: Int)] = [:]
-    @ObservationIgnored private var bleNames: [UUID: String] = [:]
+    @ObservationIgnored private var pollTask: Task<Void, Never>?
 
     init() {
         let args = ProcessInfo.processInfo.arguments
@@ -86,6 +90,13 @@ final class AppModel {
             bluetoothState = .poweredOn
             lastScanAt = Date().addingTimeInterval(-90)
             diagnostics = Self.demoDiagnostics()
+            batteryCenterStatus = .ok(count: 3)
+            batteryCenterReadAt = Date()
+            batteryCenterEntries = [
+                .init(id: "1", name: "陽翔のAirPods Pro", level: 80, charging: false, isInternal: false, part: "left", summary: "<BCBatteryDevice: name=陽翔のAirPods Pro; percentCharge=80; parts=Left>"),
+                .init(id: "2", name: "陽翔のAirPods Pro", level: 70, charging: false, isInternal: false, part: "right", summary: "<BCBatteryDevice: name=陽翔のAirPods Pro; percentCharge=70; parts=Right>"),
+                .init(id: "3", name: "iPhone", level: 64, charging: false, isInternal: true, part: nil, summary: "<BCBatteryDevice: name=iPhone; internal=1>"),
+            ]
         }
 
         scanner.onStateChange = { [weak self] state in
@@ -106,7 +117,10 @@ final class AppModel {
             MainActor.assumeIsolated { self?.updatePhone() }
         }
         NotificationCenter.default.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.updateAudioRoute() }
+            MainActor.assumeIsolated {
+                self?.updateAudioRoute()
+                self?.readBatteryCenter()
+            }
         }
     }
 
@@ -116,8 +130,13 @@ final class AppModel {
     func becameActive() {
         guard !isDemo else { return }
         calendarStatus = EKEventStore.authorizationStatus(for: .event)
+        if SharedStore.isShared {
+            // ウィジェットが自分で読んだ値を取り込む
+            snapshot.absorb(SharedStore.loadForApp())
+        }
         updateAudioRoute()
         updatePhone()
+        readBatteryCenter()
         startScan(seconds: 12)
     }
 
@@ -132,6 +151,14 @@ final class AppModel {
         scanning = true
         scanEndsAt = Date().addingTimeInterval(seconds)
         scanner.start()
+        pollTask?.cancel()
+        pollTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else { return }
+                self?.readBatteryCenter()
+            }
+        }
         stopTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(seconds))
             guard !Task.isCancelled else { return }
@@ -141,11 +168,25 @@ final class AppModel {
 
     func stopScan() {
         stopTask?.cancel()
+        pollTask?.cancel()
         scanner.stop()
         if scanning { lastScanAt = Date() }
         scanning = false
         scanEndsAt = nil
         persist()
+    }
+
+    /// iOS 標準のバッテリーウィジェットと同じ情報源から読む
+    func readBatteryCenter() {
+        guard !isDemo else { return }
+        let (status, entries) = BatteryCenterReader.read()
+        batteryCenterStatus = status
+        batteryCenterEntries = entries
+        batteryCenterReadAt = Date()
+        let updates = BatteryCenterReader.updates(from: entries, date: Date())
+        guard !updates.isEmpty else { return }
+        for u in updates { snapshot.merge(u) }
+        schedulePersist()
     }
 
     func handle(url: URL) {

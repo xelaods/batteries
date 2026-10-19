@@ -18,13 +18,23 @@ struct BatteriesProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<BatteriesEntry>) -> Void) {
-        let snapshot = SharedStore.loadForWidget()
         let now = Date()
-        // 値は同じでも「◯時間前」の表示を進めるため、15分ごとの表示を先に作っておく
-        let entries = (0..<12).map { i in
-            BatteriesEntry(date: now.addingTimeInterval(Double(i) * 15 * 60), snapshot: snapshot)
+        var snapshot = SharedStore.loadForWidget()
+        // ウィジェット自身でも iOS の電池情報を読み、つながっている機器の値を更新する
+        let (_, live) = BatteryCenterReader.read()
+        let updates = BatteryCenterReader.updates(from: live, date: now)
+        if !updates.isEmpty {
+            var s = snapshot ?? Snapshot()
+            for u in updates { s.merge(u) }
+            s.savedAt = now
+            SharedStore.saveFromWidget(s)
+            snapshot = s
         }
-        completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(3 * 3600))))
+        // 15分ごとに読み直しを頼む（実際の間隔は iOS が決める）。「◯分前」の表示も進める
+        let entries = (0..<4).map { i in
+            BatteriesEntry(date: now.addingTimeInterval(Double(i) * 5 * 60), snapshot: snapshot)
+        }
+        completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(15 * 60))))
     }
 }
 
