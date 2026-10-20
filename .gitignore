@@ -7,3 +7,5 @@ bin/
 obj/
 out/
 *.exe
+node_modules/
+pc/ui/dist/

@@ -23,11 +23,14 @@
 
   <ItemGroup>
     <EmbeddedResource Include="app.ico" LogicalName="app.ico" />
+    <!-- EasyUI で作った画面（pc/ui を npm run build したもの） -->
+    <EmbeddedResource Include="../ui/dist/index.html" LogicalName="ui.html" Condition="Exists('../ui/dist/index.html')" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="QRCoder" Version="1.6.0" />
     <PackageReference Include="HidSharp" Version="2.1.0" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
   </ItemGroup>
 
 </Project>

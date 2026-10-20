@@ -19,7 +19,9 @@ public sealed class TrayContext : ApplicationContext
     readonly Icon _icon;
     /// <summary>ほかのスレッドから画面側の処理を呼ぶための見えない部品</summary>
     readonly Control _ui = new();
-    StatusForm? _form;
+    /// <summary>状態の画面（WebView2 が使えれば EasyUI の画面、使えなければ従来の画面）</summary>
+    Form? _form;
+    bool? _webAvailable;
 
     string _lastSignature = "";
     DateTime _lastSentAt = DateTime.MinValue;
@@ -28,6 +30,7 @@ public sealed class TrayContext : ApplicationContext
     public DateTime? LastSentAt => _lastSentAt == DateTime.MinValue ? null : _lastSentAt;
     public string LastResult { get; private set; } = "まだ送っていません";
     public bool LastOk { get; private set; } = true;
+    public bool IsSending => _sending;
     public Config Config => _config;
     public AirPodsWatcher AirPods => _airPods;
     public Icon AppIcon => _icon;
@@ -39,7 +42,7 @@ public sealed class TrayContext : ApplicationContext
         _icon = LoadIcon();
 
         _airPods = new AirPodsWatcher(_config);
-        _airPods.Changed += () => _ui.BeginInvoke(new Action(() => _form?.RequestRefresh()));
+        _airPods.Changed += () => _ui.BeginInvoke(new Action(RefreshForm));
         _airPods.Start();
 
         var menu = new ContextMenuStrip();
@@ -59,7 +62,6 @@ public sealed class TrayContext : ApplicationContext
         };
         _tray.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) ShowForm(); };
 
-        // 初めて起動したときは、Windows の起動時に自動で起動するようにしておく
         // 初めて起動したときは、Windows の起動時に自動で起動するようにしておく。
         // 新しい版の exe を別の場所から起動したときは、自動起動の登録先をこの exe に向け直す
         try
@@ -113,12 +115,32 @@ public sealed class TrayContext : ApplicationContext
     {
         if (_form == null || _form.IsDisposed)
         {
-            _form = new StatusForm(this);
+            _webAvailable ??= WebForm.IsAvailable();
+            _form = _webAvailable == true ? new WebForm(this) : new StatusForm(this);
         }
         _form.Show();
         if (_form.WindowState == FormWindowState.Minimized) _form.WindowState = FormWindowState.Normal;
         _form.Activate();
-        _form.RequestRefresh();
+        RefreshForm();
+    }
+
+    /// <summary>WebView2 で表示できなかったとき、従来の画面に切り替える</summary>
+    public void FallBackToClassic()
+    {
+        _webAvailable = false;
+        var old = _form;
+        _form = null;
+        old?.Dispose();
+        ShowForm();
+    }
+
+    void RefreshForm()
+    {
+        switch (_form)
+        {
+            case WebForm w: w.RequestRefresh(); break;
+            case StatusForm s: s.RequestRefresh(); break;
+        }
     }
 
     public RelayMessage CurrentMessage() => Collector.Build(_config, _airPods.Snapshot());
@@ -135,11 +157,12 @@ public sealed class TrayContext : ApplicationContext
         UpdateTrayText(message);
         if (!due || message.Devices.Count == 0)
         {
-            _form?.RequestRefresh();
+            RefreshForm();
             return;
         }
 
         _sending = true;
+        RefreshForm();
         try
         {
             var (ok, detail) = await Relay.SendAsync(_config.Topic, message);
@@ -155,7 +178,7 @@ public sealed class TrayContext : ApplicationContext
         finally
         {
             _sending = false;
-            _form?.RequestRefresh();
+            RefreshForm();
         }
     }
 

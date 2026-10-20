@@ -26,6 +26,18 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: pc/ui/package-lock.json
+
+      - name: Build UI（EasyUI）
+        working-directory: pc/ui
+        run: |
+          npm ci
+          npm run build
+
       - name: Build exe
         shell: pwsh
         run: |

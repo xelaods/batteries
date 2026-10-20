@@ -1,0 +1,122 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+/* フォント（EasyUI と同じ Geist / JetBrains Mono を埋め込み。日本語は Windows の游ゴシック UI） */
+@font-face { font-family: "Geist"; font-weight: 400; font-display: block; src: url("./fonts/geist-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+2000-206F, U+2190-21FF, U+2212; }
+@font-face { font-family: "Geist"; font-weight: 500; font-display: block; src: url("./fonts/geist-500-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+2000-206F, U+2190-21FF, U+2212; }
+@font-face { font-family: "Geist"; font-weight: 600; font-display: block; src: url("./fonts/geist-600-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+2000-206F, U+2190-21FF, U+2212; }
+@font-face { font-family: "Geist"; font-weight: 700; font-display: block; src: url("./fonts/geist-700-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+2000-206F, U+2190-21FF, U+2212; }
+@font-face { font-family: "JetBrains Mono"; font-weight: 400; font-display: block; src: url("./fonts/jetbrains-mono-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF; }
+@font-face { font-family: "JetBrains Mono"; font-weight: 500; font-display: block; src: url("./fonts/jetbrains-mono-500-normal.woff2") format("woff2"); unicode-range: U+0000-00FF; }
+
+/* EasyUI のデザイントークン（暗い配色） */
+:root,
+.dark {
+  --bg: #111113;
+  --surface: #1c1c1f;
+  --surface-hover: #202023;
+  --surface-raised: #18181a;
+
+  --border: #29292c;
+  --border-hover: #343438;
+  --border-subtle: #18181a;
+
+  --text-primary: #f2f2f3;
+  --text-secondary: #a1a1a6;
+  --text-muted: #6f6f75;
+  --text-subtle: #4d4d52;
+
+  --accent: #f2f2f3;
+  --accent-subtle: rgba(242, 242, 243, 0.06);
+  --accent-glow: rgba(242, 242, 243, 0.08);
+  --accent-ring: rgba(242, 242, 243, 0.2);
+  --indicator-active: #3b82f6;
+
+  --font-sans: "Geist", "Yu Gothic UI", "Meiryo UI", "Noto Sans CJK JP", "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+  --tracking-body: -0.011em;
+}
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-raised: var(--surface-raised);
+  --color-border: var(--border);
+  --color-border-hover: var(--border-hover);
+  --color-border-subtle: var(--border-subtle);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-subtle: var(--text-subtle);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    letter-spacing: var(--tracking-body);
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    overflow: hidden;
+  }
+  input {
+    user-select: text;
+  }
+}
+
+.focus-ring {
+  outline: none;
+}
+.focus-ring:focus-visible {
+  outline: 1px solid var(--accent-ring);
+  outline-offset: 1px;
+}
+
+/* 背景のうっすらした点の模様（EasyUI の bg-dot-subtle） */
+.bg-dot-subtle {
+  background-size: 18px 18px;
+  background-image: radial-gradient(circle, var(--border) 1px, transparent 1px);
+}
+
+/* スクロールバー */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
+
+/* スライダー（電波の強さ） */
+input[type="range"].range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 9999px;
+  background: linear-gradient(to right, var(--text-primary) var(--fill), var(--surface-raised) var(--fill));
+  outline: none;
+}
+input[type="range"].range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: var(--text-primary);
+  box-shadow: 0 0 0 4px rgba(242, 242, 243, 0.08);
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+input[type="range"].range::-webkit-slider-thumb:active {
+  transform: scale(1.15);
+}

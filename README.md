@@ -71,7 +71,8 @@ Shared/            データ・中継の受け取り・保存・ウィジェッ�
 Batteries/         iPhone アプリ本体（SwiftUI）
 BatteriesWidget/   ウィジェット（WidgetKit）
 BatteriesTests/    ユニットテスト
-pc/BatteriesPC/    Windows の常駐アプリ（C# / WinForms、AirPods の電波の読み取り）
+pc/BatteriesPC/    Windows の常駐アプリ（C#、AirPods の電波の読み取り・送信。画面は WebView2 で表示）
+pc/ui/             PC アプリの画面（React + EasyUI、1ファイルにまとめて exe に埋め込む）
 tools/icon.py      アプリアイコンの生成
 project.yml        XcodeGen の設定
 ```
