@@ -234,4 +234,15 @@ final class RelayTests: XCTestCase {
         XCTAssertEqual(s.computerNames?["machine"], "NOTE")
         XCTAssertEqual(s.devices.first { $0.kind == .computer }?.component("main")?.level, 70)
     }
+
+    func testUnknownAirPodsModelsAreIgnoredAndPurged() {
+        // 実在しない機種番号（ほかの Apple 製品の電波を取り違えたもの）
+        let bad = #"{"v":1,"pc":"NOTE","pcId":"note","at":100,"devices":[{"id":"airpods-3A0B","kind":"airpods","model":14859,"parts":[{"id":"right","level":20,"at":100}]},{"id":"airpods-1420","kind":"airpods","model":5152,"parts":[{"id":"left","level":80,"at":100}]}]}"#
+        var s = Snapshot()
+        s.devices.append(DeviceRecord(id: "airpods-6DF8", name: "AirPods / Beats（6DF8）", kind: .airpods, symbol: "airpods",
+                                      components: [.init(id: "right", label: "右", level: 80, charging: true, updatedAt: Date())],
+                                      updatedAt: Date(), source: "PC"))
+        RelayClient.apply(RelayClient.parse(Data(line(time: 100, bad).utf8)), to: &s)
+        XCTAssertEqual(s.devices.map(\.id), ["airpods-1420"])
+    }
 }

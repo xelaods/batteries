@@ -64,6 +64,7 @@ final class AppModel {
             // ウィジェットが自分で受け取った値を取り込む
             snapshot.absorb(SharedStore.loadForApp())
         }
+        snapshot.removeMisreadAirPods()
         updatePhone()
         scanner.start()
         Task { await refresh() }

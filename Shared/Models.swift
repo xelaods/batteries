@@ -175,6 +175,15 @@ extension Snapshot {
         }
     }
 
+    /// 前の版で AirPods と取り違えて記録した、ほかの Apple 製品の分を消す
+    mutating func removeMisreadAirPods() {
+        devices.removeAll { d in
+            guard d.kind == .airpods, d.id.hasPrefix("airpods-"),
+                  let code = UInt16(d.id.dropFirst("airpods-".count), radix: 16) else { return false }
+            return !AirPodsModel.isKnown(code)
+        }
+    }
+
     /// 前の ID を今の ID に向け直す
     func redirectedID(_ id: String) -> String {
         var current = id

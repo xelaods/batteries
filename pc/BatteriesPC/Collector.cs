@@ -50,6 +50,7 @@ public static class Collector
         long weekAgo = now - 7 * 24 * 3600;
         foreach (var a in airPods)
         {
+            if (!ProximityPairing.IsKnownModel(a.Model)) continue;
             var parts = a.Parts
                 .Where(p => p.Value.At >= weekAgo)
                 .Select(p => new RelayPart(p.Key, null, p.Value.Level, p.Value.Charging, p.Value.At))

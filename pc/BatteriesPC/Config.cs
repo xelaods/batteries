@@ -62,6 +62,9 @@ public sealed class Config
                 {
                     if (!IsValidTopic(c.Topic)) c.Topic = NewTopic();
                     if (string.IsNullOrWhiteSpace(c.PcName)) c.PcName = Environment.MachineName;
+                    // 前の版で AirPods と取り違えて記録した、ほかの Apple 製品の分を消す
+                    foreach (var key in c.AirPods.Where(kv => !ProximityPairing.IsKnownModel(kv.Value.Model)).Select(kv => kv.Key).ToList())
+                        c.AirPods.Remove(key);
                     if (string.IsNullOrWhiteSpace(c.PcId))
                     {
                         // 以前の版は名前から ID を作っていた。名前を変えて別の PC に見えている分もまとめる

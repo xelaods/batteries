@@ -51,6 +51,8 @@ public static class ProximityPairing
     {
         if (p.Length < 6) return null;
         int model = (p[1] << 8) | p[2];
+        // 種類 0x07 は AirPods 以外の Apple 製品も使う。実在する機種番号のものだけ読む
+        if (!IsKnownModel(model)) return null;
         byte status = p[3];
         bool flipped = (status & 0x20) == 0;
         if (swapSides) flipped = !flipped;
@@ -71,25 +73,37 @@ public static class ProximityPairing
 
     static int? Percent(int raw) => raw is >= 0 and <= 10 ? raw * 10 : null;
 
-    public static string ModelName(int model) => model switch
+    /// <summary>実在する AirPods・Beats の機種番号。これ以外は別の Apple 製品の電波なので無視する</summary>
+    static readonly Dictionary<int, string> Models = new()
     {
-        0x0220 => "AirPods",
-        0x0F20 => "AirPods（第2世代）",
-        0x1320 => "AirPods（第3世代）",
-        0x1920 => "AirPods 4",
-        0x1B20 => "AirPods 4（ANC）",
-        0x0E20 => "AirPods Pro",
-        0x1420 => "AirPods Pro（第2世代）",
-        0x2420 => "AirPods Pro（第2世代・USB-C）",
-        0x2720 => "AirPods Pro 3",
-        0x0A20 => "AirPods Max",
-        0x1F20 => "AirPods Max（USB-C）",
-        0x0B20 => "Powerbeats Pro",
-        0x1120 => "Beats Studio Buds",
-        0x1720 => "Beats Studio Buds +",
-        0x1220 => "Beats Fit Pro",
-        _ => $"AirPods / Beats（{model:X4}）",
+        [0x0220] = "AirPods",
+        [0x0F20] = "AirPods（第2世代）",
+        [0x1320] = "AirPods（第3世代）",
+        [0x1920] = "AirPods 4",
+        [0x1B20] = "AirPods 4（ANC）",
+        [0x0E20] = "AirPods Pro",
+        [0x1420] = "AirPods Pro（第2世代）",
+        [0x2420] = "AirPods Pro（第2世代・USB-C）",
+        [0x2720] = "AirPods Pro 3",
+        [0x0A20] = "AirPods Max",
+        [0x1F20] = "AirPods Max（USB-C）",
+        [0x0320] = "Powerbeats3",
+        [0x0B20] = "Powerbeats Pro",
+        [0x0C20] = "Beats Solo Pro",
+        [0x1120] = "Beats Studio Buds",
+        [0x1020] = "Beats Flex",
+        [0x0520] = "BeatsX",
+        [0x0620] = "Beats Solo3",
+        [0x0920] = "Beats Studio3",
+        [0x1720] = "Beats Studio Buds +",
+        [0x1220] = "Beats Fit Pro",
+        [0x1620] = "Beats Studio Pro",
     };
+
+    public static bool IsKnownModel(int model) => Models.ContainsKey(model);
+
+    public static string ModelName(int model) =>
+        Models.TryGetValue(model, out var name) ? name : $"不明な機種（{model:X4}）";
 }
 
 /// <summary>Bluetooth の電波を受け取り続け、AirPods の電池を Config.AirPods に記録する</summary>

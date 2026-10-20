@@ -26,6 +26,12 @@ struct HomeView: View {
                             NavigationLink(value: device.id) {
                                 DeviceCard(device: device, now: context.date)
                             }
+                            .swipeActions(edge: .trailing) {
+                                Button("消す", role: .destructive) { model.delete(device.id) }
+                            }
+                            .contextMenu {
+                                Button("この機器の記録を消す", systemImage: "trash", role: .destructive) { model.delete(device.id) }
+                            }
                         }
                     }
                 }

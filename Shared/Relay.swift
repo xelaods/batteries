@@ -57,7 +57,9 @@ struct RelayMessage: Codable, Equatable {
             var parts = d.parts.map {
                 DeviceUpdate.Part(id: $0.id, label: $0.label ?? Self.label(for: $0.id), level: $0.level, charging: $0.charging ?? false, date: Date(timeIntervalSince1970: $0.at))
             }
-            if kind == .airpods, let model = d.model {
+            if kind == .airpods {
+                // 実在しない機種番号は、ほかの Apple 製品の電波を取り違えたもの
+                guard let model = d.model, AirPodsModel.isKnown(UInt16(truncatingIfNeeded: model)) else { return nil }
                 let info = AirPodsModel.lookup(UInt16(truncatingIfNeeded: model))
                 name = d.name ?? info.name
                 symbol = info.symbol
@@ -146,6 +148,7 @@ enum RelayClient {
 
     /// 受け取った値を記録に混ぜる
     static func apply(_ received: [Received], to snapshot: inout Snapshot) {
+        snapshot.removeMisreadAirPods()
         for r in received {
             let m = r.message
             if let pcId = m.pcId {

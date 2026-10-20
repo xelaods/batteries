@@ -59,6 +59,8 @@ enum ProximityPairing {
     static func parse(payload p: [UInt8], swapSides: Bool = false) -> Reading? {
         guard p.count >= 6 else { return nil }
         let model = (UInt16(p[1]) << 8) | UInt16(p[2])
+        // 種類 0x07 は AirPods 以外の Apple 製品も使う。実在する機種番号のものだけ読む
+        guard AirPodsModel.isKnown(model) else { return nil }
         let status = p[3]
         let battery = p[4]
         let chargeAndCase = p[5]
@@ -109,8 +111,17 @@ struct AirPodsModel: Equatable {
     /// AirPods Max のように電池が1つだけの機種
     var singleBattery: Bool
 
+    /// 実在する AirPods・Beats の機種番号か（違えば別の Apple 製品の電波）
+    static func isKnown(_ code: UInt16) -> Bool { table[code] != nil }
+
     static func lookup(_ code: UInt16) -> AirPodsModel {
-        let table: [UInt16: (String, String, Bool)] = [
+        if let entry = table[code] {
+            return AirPodsModel(code: code, name: entry.0, symbol: entry.1, singleBattery: entry.2)
+        }
+        return AirPodsModel(code: code, name: String(format: "AirPods / Beats（%04X）", code), symbol: "airpods", singleBattery: false)
+    }
+
+    private static let table: [UInt16: (String, String, Bool)] = [
             0x0220: ("AirPods", "airpods", false),
             0x0F20: ("AirPods（第2世代）", "airpods", false),
             0x1320: ("AirPods（第3世代）", "airpods.gen3", false),
@@ -133,12 +144,7 @@ struct AirPodsModel: Equatable {
             0x1720: ("Beats Studio Buds +", "beats.studiobuds", false),
             0x1220: ("Beats Fit Pro", "beats.fitpro", false),
             0x1620: ("Beats Studio Pro", "headphones", true),
-        ]
-        if let entry = table[code] {
-            return AirPodsModel(code: code, name: entry.0, symbol: entry.1, singleBattery: entry.2)
-        }
-        return AirPodsModel(code: code, name: String(format: "AirPods / Beats（%04X）", code), symbol: "airpods", singleBattery: false)
-    }
+    ]
 
     /// イヤホンのアイコンに合うケースのアイコン
     static func caseSymbol(for symbol: String) -> String {
