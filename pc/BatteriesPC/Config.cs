@@ -41,6 +41,8 @@ public sealed class Config
     public bool ReadAirPods { get; set; } = true;
     /// <summary>最後に読み取った AirPods の値（再起動しても送れるように残す）</summary>
     public Dictionary<string, AirPodsRecord> AirPods { get; set; } = new();
+    /// <summary>最後に読み取ったマウスの値</summary>
+    public MouseRecord? Mouse { get; set; }
 
     [JsonIgnore] public bool IsNew { get; private set; }
 

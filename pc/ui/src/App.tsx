@@ -167,7 +167,7 @@ function NowTab({ state }: { state: State }) {
         ) : (
           state.airpods.map((a) => <AirPodsCard key={a.model} airpods={a} now={state.now} />)
         )}
-        <MouseCard />
+        <MouseCard state={state} />
       </div>
       <SendCard state={state} />
     </div>
@@ -237,23 +237,47 @@ function AirPodsCard({ airpods, now }: { airpods: AirPods; now: number }) {
   );
 }
 
-function MouseCard() {
+function MouseCard({ state }: { state: State }) {
+  const m = state.mouse;
+  const stale = m ? state.now - m.at > 15 * 60 : false;
   return (
-    <SpotlightCard className="border-border bg-surface p-5">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="grid size-10 place-items-center rounded-lg border border-border bg-surface-raised">
-            <Mouse className="size-[18px] text-text-muted" />
+    <SpotlightCard className="border-border bg-surface p-5" spotlightColor="rgba(167, 139, 250, 0.06)">
+      <SectionLabel
+        icon={<Mouse className="size-3.5" />}
+        right={
+          m ? (
+            <Badge tone={stale ? "neutral" : "success"} dot pulse={!stale}>
+              {stale ? `最後の値・${ago(state.now - m.at)}` : "読み取り中"}
+            </Badge>
+          ) : undefined
+        }
+      >
+        {m ? m.name : "マウス"}
+      </SectionLabel>
+      {m ? (
+        <div className="flex items-center gap-5">
+          <BatteryRing level={m.level} charging={m.charging} size={84} stroke={7} stale={stale} />
+          <div className="flex-1 text-xs leading-relaxed text-text-muted">
+            <div>{m.charging ? "ケーブルで充電中" : "電池で動作中"}・{(m.millivolts / 1000).toFixed(2)} V</div>
+            {state.mouseStatus !== "読み取りました" && <div className="mt-1 text-text-subtle">{state.mouseStatus}</div>}
           </div>
-          <div>
-            <div className="text-sm font-medium">マウス（VXE）</div>
-            <div className="text-xs text-text-muted">電池の読み方を調べている段階です</div>
+          <Button variant="ghost" size="sm" onClick={() => send({ type: "pollMouse" })}>
+            読み直す
+          </Button>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-xs leading-relaxed text-text-muted">{state.mouseStatus}</p>
+          <div className="flex shrink-0 gap-2">
+            <Button variant="ghost" size="sm" onClick={() => send({ type: "pollMouse" })}>
+              読み直す
+            </Button>
+            <Button variant="outline" size="sm" leftIcon={<FileText className="size-3.5" />} onClick={() => send({ type: "dumpHid" })}>
+              情報を書き出す
+            </Button>
           </div>
         </div>
-        <Button variant="outline" size="sm" leftIcon={<FileText className="size-3.5" />} onClick={() => send({ type: "dumpHid" })}>
-          情報を書き出す
-        </Button>
-      </div>
+      )}
     </SpotlightCard>
   );
 }

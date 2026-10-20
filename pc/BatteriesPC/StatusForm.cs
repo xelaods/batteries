@@ -208,7 +208,10 @@ public sealed class StatusForm : Form
         }
         if (PcBattery.Read() == null) lines.Insert(0, "💻  この PC には電池がありません（デスクトップ PC）");
         if (!message.Devices.Any(d => d.Kind == "airpods")) lines.Add("🎧  AirPods はまだ見つかっていません（ケースを開けて PC の近くに置いてください）");
-        lines.Add("🖱  マウスは次の段階で対応します");
+        if (_app.Config.Mouse is { } mouse)
+            lines.Add($"🖱  {mouse.Name}　{mouse.Level}%{(mouse.Charging ? "（ケーブル接続中）" : "")}　（{Ago(now - mouse.At)}）");
+        else
+            lines.Add("🖱  マウス：" + _app.Mouse.Status);
         _values.Text = string.Join("\n", lines);
 
         var air = _app.AirPods;

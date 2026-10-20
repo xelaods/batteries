@@ -13,6 +13,8 @@ public sealed class TrayContext : ApplicationContext
 
     readonly Config _config;
     readonly AirPodsWatcher _airPods;
+    readonly MouseReader _mouse;
+    bool _pollingMouse;
     readonly NotifyIcon _tray;
     readonly System.Windows.Forms.Timer _timer;
     readonly EventWaitHandle _showSignal;
@@ -33,6 +35,7 @@ public sealed class TrayContext : ApplicationContext
     public bool IsSending => _sending;
     public Config Config => _config;
     public AirPodsWatcher AirPods => _airPods;
+    public MouseReader Mouse => _mouse;
     public Icon AppIcon => _icon;
 
     public TrayContext(bool startHidden)
@@ -44,6 +47,7 @@ public sealed class TrayContext : ApplicationContext
         _airPods = new AirPodsWatcher(_config);
         _airPods.Changed += () => _ui.BeginInvoke(new Action(RefreshForm));
         _airPods.Start();
+        _mouse = new MouseReader(_config);
 
         var menu = new ContextMenuStrip();
         menu.Items.Add("状態と iPhone 連携を開く", null, (_, _) => ShowForm());
@@ -72,7 +76,11 @@ public sealed class TrayContext : ApplicationContext
         catch { }
 
         _timer = new System.Windows.Forms.Timer { Interval = 60_000 };
-        _timer.Tick += async (_, _) => await SendAsync(force: false);
+        _timer.Tick += async (_, _) =>
+        {
+            await PollMouseAsync();
+            await SendAsync(force: false);
+        };
         _timer.Start();
 
         // 2つ目を起動されたら画面を開く
@@ -83,8 +91,13 @@ public sealed class TrayContext : ApplicationContext
         }, null, Timeout.Infinite, executeOnlyOnce: false);
 
         // 起動して少ししたら1回送る（Bluetooth の電波を少し集めてから）
+        _ = PollMouseAsync();
         _ = Task.Delay(TimeSpan.FromSeconds(20)).ContinueWith(_ =>
-            _ui.BeginInvoke(new Action(async () => await SendAsync(force: true))));
+            _ui.BeginInvoke(new Action(async () =>
+            {
+                await PollMouseAsync();
+                await SendAsync(force: true);
+            })));
 
         if (!startHidden || _config.IsNew)
         {
@@ -143,6 +156,23 @@ public sealed class TrayContext : ApplicationContext
         }
     }
 
+    /// <summary>マウスのレシーバーに問い合わせる（USB の読み書きは画面を止めないよう別スレッドで）</summary>
+    public async Task PollMouseAsync()
+    {
+        if (_pollingMouse) return;
+        _pollingMouse = true;
+        try
+        {
+            bool changed = await Task.Run(_mouse.Poll);
+            if (changed) _config.Save();
+        }
+        finally
+        {
+            _pollingMouse = false;
+            RefreshForm();
+        }
+    }
+
     public RelayMessage CurrentMessage() => Collector.Build(_config, _airPods.Snapshot());
 
     public async Task SendAsync(bool force)
@@ -194,6 +224,7 @@ public sealed class TrayContext : ApplicationContext
                 var buds = d.Parts.Where(p => p.Id is "left" or "right").Select(p => p.Level).DefaultIfEmpty(-1).Min();
                 if (buds >= 0) parts.Add($"AirPods {buds}%");
             }
+            else if (d.Kind == "mouse") parts.Add($"マウス {d.Parts[0].Level}%");
         }
         var text = "バッテリー送信" + (parts.Count > 0 ? "\n" + string.Join(" / ", parts) : "");
         _tray.Text = text.Length > 120 ? text[..120] : text;

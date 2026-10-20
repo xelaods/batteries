@@ -158,6 +158,15 @@ public sealed class WebForm : Form
                     name = ProximityPairing.ModelName(d.Model ?? 0),
                     parts = d.Parts.Select(p => new { id = p.Id, level = p.Level, charging = p.Charging, at = p.At }),
                 }),
+            mouse = config.Mouse == null ? null : new
+            {
+                name = config.Mouse.Name,
+                level = config.Mouse.Level,
+                charging = config.Mouse.Charging,
+                millivolts = config.Mouse.Millivolts,
+                at = config.Mouse.At,
+            },
+            mouseStatus = _app.Mouse.Status,
             bluetooth = new
             {
                 status = air.Status,
@@ -217,6 +226,7 @@ public sealed class WebForm : Form
                 break;
 
             case "send":
+                await _app.PollMouseAsync();
                 await _app.SendAsync(force: true);
                 if (_app.LastOk) Toast("iPhone に送りました", "success");
                 else Toast(_app.LastResult, "danger");
@@ -278,6 +288,11 @@ public sealed class WebForm : Form
                 {
                     Toast("設定できませんでした：" + ex.Message, "danger");
                 }
+                break;
+
+            case "pollMouse":
+                await _app.PollMouseAsync();
+                Toast(_app.Mouse.Status, _app.Mouse.Status == "読み取りました" ? "success" : "neutral");
                 break;
 
             case "dumpHid":

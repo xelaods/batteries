@@ -60,6 +60,13 @@ public static class Collector
             devices.Add(new RelayDevice($"airpods-{a.Model:X4}", null, "airpods", null, a.Model, parts));
         }
 
+        // マウス（1週間以内に読めたもの）
+        if (config.Mouse is { } m && m.At >= weekAgo)
+        {
+            devices.Add(new RelayDevice(m.DeviceId, m.Name, "mouse", "computermouse", null,
+                [new RelayPart("main", "本体", m.Level, m.Charging, m.At)]));
+        }
+
         return new RelayMessage(1, config.PcName, now, devices)
         {
             PcId = config.PcId,

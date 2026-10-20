@@ -12,6 +12,8 @@ export type State = {
   qr: string;
   pc: { level: number; charging: boolean; plugged: boolean } | null;
   airpods: AirPods[];
+  mouse: { name: string; level: number; charging: boolean; millivolts: number; at: number } | null;
+  mouseStatus: string;
   bluetooth: { status: string; lastSignalAt: number | null; lastRssi: number | null; signals: number };
   send: { lastSentAt: number | null; result: string; ok: boolean; sending: boolean };
   settings: { startup: boolean; readAirPods: boolean; swapSides: boolean; rssi: number };
@@ -27,6 +29,7 @@ export type Command =
   | { type: "rename"; name: string }
   | { type: "setting"; key: "startup" | "readAirPods" | "swapSides" | "rssi"; value: boolean | number }
   | { type: "dumpHid" }
+  | { type: "pollMouse" }
   | { type: "openFolder" };
 
 export type Incoming =
@@ -92,6 +95,8 @@ const demo = (() => {
         ],
       },
     ],
+    mouse: { name: "VXE マウス", level: 55, charging: false, millivolts: 3912, at: now() - 90 },
+    mouseStatus: "読み取りました",
     bluetooth: { status: "AirPods を受信中", lastSignalAt: now() - 4, lastRssi: -48, signals: 214 },
     send: { lastSentAt: now() - 420, result: "送信しました", ok: true, sending: false },
     settings: { startup: true, readAirPods: true, swapSides: false, rssi: -70 },
@@ -102,7 +107,7 @@ const demo = (() => {
   return {
     start() {
       const params = new URLSearchParams(location.search);
-      if (params.has("empty")) state = { ...state, airpods: [], pc: null };
+      if (params.has("empty")) state = { ...state, airpods: [], pc: null, mouse: null, mouseStatus: "レシーバーが HID Remapper の先にあるため読めません（PC に直接挿すと読めます）" };
       push();
       setInterval(() => {
         if (state.pc && !params.has("still")) {
@@ -138,6 +143,9 @@ const demo = (() => {
           state = { ...state, topic: c.topic, topicGrouped: c.topic };
           push();
           listener?.({ type: "toast", text: "合言葉を変えました", tone: "success" });
+          break;
+        case "pollMouse":
+          listener?.({ type: "toast", text: state.mouseStatus, tone: "success" });
           break;
         case "dumpHid":
           listener?.({ type: "toast", text: "デスクトップに batteries-hid.txt を作りました", tone: "neutral" });
