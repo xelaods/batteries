@@ -60,10 +60,14 @@ public sealed class TrayContext : ApplicationContext
         _tray.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) ShowForm(); };
 
         // 初めて起動したときは、Windows の起動時に自動で起動するようにしておく
-        if (_config.IsNew && !Startup.Registered)
+        // 初めて起動したときは、Windows の起動時に自動で起動するようにしておく。
+        // 新しい版の exe を別の場所から起動したときは、自動起動の登録先をこの exe に向け直す
+        try
         {
-            try { Startup.Enabled = true; } catch { }
+            if ((_config.IsNew && !Startup.Registered) || (Startup.Registered && !Startup.Enabled))
+                Startup.Enabled = true;
         }
+        catch { }
 
         _timer = new System.Windows.Forms.Timer { Interval = 60_000 };
         _timer.Tick += async (_, _) => await SendAsync(force: false);

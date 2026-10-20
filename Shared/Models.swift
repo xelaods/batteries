@@ -56,6 +56,8 @@ struct Snapshot: Codable, Equatable {
     var computers: [String: Date]?
     /// PC の ID → 表示する名前
     var computerNames: [String: String]?
+    /// PC の ID → PC アプリの版
+    var computerVersions: [String: String]?
     /// 前に使われていた機器 ID → 今の機器 ID（PC の名前を変えたときなど）
     var redirects: [String: String]?
 

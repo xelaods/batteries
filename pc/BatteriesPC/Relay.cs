@@ -33,6 +33,8 @@ public sealed record RelayMessage(
     [JsonPropertyName("formerIds")] public List<string>? FormerIds { get; init; }
     /// <summary>前に使っていた PC の名前</summary>
     [JsonPropertyName("formerNames")] public List<string>? FormerNames { get; init; }
+    /// <summary>PC アプリの版</summary>
+    [JsonPropertyName("ver")] public string? Ver { get; init; }
 }
 
 /// <summary>ntfy.sh に送る</summary>

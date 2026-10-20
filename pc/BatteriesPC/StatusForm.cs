@@ -23,7 +23,7 @@ public sealed class StatusForm : Form
     public StatusForm(TrayContext app)
     {
         _app = app;
-        Text = "バッテリー送信";
+        Text = $"バッテリー送信 {AppInfo.Version}";
         Icon = app.AppIcon;
         Font = new Font("Yu Gothic UI", 9.5f);
         AutoScaleMode = AutoScaleMode.Dpi;

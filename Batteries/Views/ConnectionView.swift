@@ -54,7 +54,14 @@ struct ConnectionView: View {
                                 HStack {
                                     Image(systemName: "laptopcomputer")
                                         .frame(width: 28)
-                                    Text(model.snapshot.computerNames?[pc.key] ?? pc.key)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(model.snapshot.computerNames?[pc.key] ?? pc.key)
+                                        if let ver = model.snapshot.computerVersions?[pc.key] {
+                                            Text(ver == "古い版" ? "古い版のアプリ（名前を変えると2つに分かれます）" : "アプリ \(ver)")
+                                                .font(.caption)
+                                                .foregroundStyle(ver == "古い版" ? .orange : .secondary)
+                                        }
+                                    }
                                     Spacer()
                                     Text(BatteryStyle.ago(pc.value, now: context.date))
                                         .font(.subheadline)

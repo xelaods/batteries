@@ -33,6 +33,8 @@ struct RelayMessage: Codable, Equatable {
     var formerIds: [String]? = nil
     /// 前に使っていた PC の名前
     var formerNames: [String]? = nil
+    /// PC アプリの版
+    var ver: String? = nil
 
     /// PC 一覧で使うキー
     var computerKey: String { pcId ?? pc }
@@ -159,6 +161,7 @@ enum RelayClient {
                 for name in (m.formerNames ?? []) + [m.pc] where name != pcId {
                     snapshot.computers?[name] = nil
                     snapshot.computerNames?[name] = nil
+                    snapshot.computerVersions?[name] = nil
                 }
             }
             for u in m.updates() { snapshot.merge(snapshot.redirected(u)) }
@@ -182,6 +185,9 @@ enum RelayClient {
                     var names = snapshot.computerNames ?? [:]
                     names[key] = m.pc
                     snapshot.computerNames = names
+                    var versions = snapshot.computerVersions ?? [:]
+                    versions[key] = m.pcId == nil ? "古い版" : (m.ver ?? "?")
+                    snapshot.computerVersions = versions
                 }
             }
             snapshot.computers = computers

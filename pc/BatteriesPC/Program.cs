@@ -7,15 +7,57 @@ static class Program
     [STAThread]
     static void Main(string[] args)
     {
-        using var mutex = new Mutex(true, @"Local\BatteriesPC", out bool first);
-        if (!first)
+        bool fromStartup = args.Contains("--tray");
+        var mutex = new Mutex(false, @"Local\BatteriesPC");
+        if (!TryOwn(mutex, TimeSpan.Zero))
         {
-            // すでに起動している：もう一方に画面を開いてもらう
-            Signal.Raise();
-            return;
+            if (fromStartup)
+            {
+                // Windows の起動時：すでに動いているならそのまま任せる
+                return;
+            }
+            // 手で起動したとき：古い版が動いている可能性があるので、止めて入れ替わる
+            StopOtherInstances();
+            if (!TryOwn(mutex, TimeSpan.FromSeconds(10)))
+            {
+                Signal.Raise();
+                return;
+            }
         }
         ApplicationConfiguration.Initialize();
-        Application.Run(new TrayContext(startHidden: args.Contains("--tray")));
+        Application.Run(new TrayContext(startHidden: fromStartup));
+        GC.KeepAlive(mutex);
+    }
+
+    static bool TryOwn(Mutex mutex, TimeSpan timeout)
+    {
+        try { return mutex.WaitOne(timeout); }
+        catch (AbandonedMutexException) { return true; } // 前のものが止められた
+    }
+
+    /// <summary>ほかに動いているバッテリー送信（古い版を含む）を止める</summary>
+    static void StopOtherInstances()
+    {
+        var me = Environment.ProcessId;
+        foreach (var p in System.Diagnostics.Process.GetProcesses())
+        {
+            try
+            {
+                if (p.Id != me && p.ProcessName.StartsWith("BatteriesPC", StringComparison.OrdinalIgnoreCase))
+                {
+                    p.Kill();
+                    p.WaitForExit(5000);
+                }
+            }
+            catch
+            {
+                // 止められないものは飛ばす
+            }
+            finally
+            {
+                p.Dispose();
+            }
+        }
     }
 }
 
@@ -68,6 +110,18 @@ static class Startup
         {
             using var k = Registry.CurrentUser.OpenSubKey(Key);
             return k?.GetValue(Value) != null;
+        }
+    }
+}
+
+static class AppInfo
+{
+    public static string Version
+    {
+        get
+        {
+            var v = typeof(AppInfo).Assembly.GetName().Version;
+            return v == null ? "?" : $"{v.Major}.{v.Minor}.{v.Build}";
         }
     }
 }

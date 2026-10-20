@@ -63,6 +63,7 @@ public static class Collector
         return new RelayMessage(1, config.PcName, now, devices)
         {
             PcId = config.PcId,
+            Ver = AppInfo.Version,
             FormerIds = config.FormerIds.Count > 0 ? config.FormerIds.ToList() : null,
             FormerNames = config.FormerNames.Count > 0 ? config.FormerNames.ToList() : null,
         };
